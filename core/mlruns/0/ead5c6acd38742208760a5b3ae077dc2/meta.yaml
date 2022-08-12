@@ -1,0 +1,15 @@
+artifact_uri: file:///nadeem_lab/Eliram/repos/hact-net/core/mlruns/0/ead5c6acd38742208760a5b3ae077dc2/artifacts
+end_time: 1637279554803
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: ead5c6acd38742208760a5b3ae077dc2
+run_uuid: ead5c6acd38742208760a5b3ae077dc2
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1637279457403
+status: 3
+tags: []
+user_id: nofe

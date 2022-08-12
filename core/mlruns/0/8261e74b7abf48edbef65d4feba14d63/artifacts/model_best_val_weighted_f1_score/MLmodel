@@ -1,0 +1,13 @@
+artifact_path: model_best_val_weighted_f1_score
+flavors:
+  python_function:
+    data: data
+    env: conda.yaml
+    loader_module: mlflow.pytorch
+    pickle_module_name: mlflow.pytorch.pickle_module
+    python_version: 3.7.11
+  pytorch:
+    model_data: data
+    pytorch_version: 1.10.0
+run_id: 8261e74b7abf48edbef65d4feba14d63
+utc_time_created: '2021-11-10 21:12:04.526976'

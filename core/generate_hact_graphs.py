@@ -37,7 +37,7 @@ TUMOR_TYPE_TO_LABEL = {
 
 MIN_NR_PIXELS = 50000
 MAX_NR_PIXELS = 50000000  
-STAIN_NORM_TARGET_IMAGE = '../data/target.png'  # define stain normalization target image. 
+STAIN_NORM_TARGET_IMAGE = '/nadeem_lab/Eliram/repos/hact-net/data/target.png'  # define stain normalization target image. 
 
 
 def parse_arguments():

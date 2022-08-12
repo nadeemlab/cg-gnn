@@ -96,7 +96,7 @@ def main(args):
 
     # load config file
     with open(args.config_fpath, 'r') as f:
-        config = yaml.load(f)
+        config = yaml.safe_load(f)
 
     # make test data loaders 
     dataloader = make_data_loader(
@@ -144,6 +144,10 @@ def main(args):
     if not args.pretrained:
         model.load_state_dict(torch.load(args.model_path))
     model.eval()
+
+    # print # of parameters
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(pytorch_total_params)
 
     # start testing
     all_test_logits = []

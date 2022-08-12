@@ -1,0 +1,5 @@
+This v3 data was generated from the 'previous_version' RoIs of the BRACS dataset downloaded from https://www.bracs.icar.cnr.it/download/
+
+Train set: 3162 images
+Val set: 602 images
+Test set: 626 images

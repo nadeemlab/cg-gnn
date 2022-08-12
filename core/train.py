@@ -113,7 +113,7 @@ def main(args):
 
     # load config file
     with open(args.config_fpath, 'r') as f:
-        config = yaml.load(f)
+        config = yaml.safe_load(f)
 
     # log parameters to logger
     if args.logger == 'mlflow':
@@ -313,7 +313,7 @@ def main(args):
             mlflow.log_metric('best_test_weighted_f1_score_' + metric, weighted_f1_score, step=step)
 
         # compute and store classification report 
-        report = classification_report(all_test_labels, all_test_preds)
+        report = classification_report(all_test_labels, all_test_preds, digits=4)
         out_path = os.path.join(model_path, 'classification_report.txt')
         with open(out_path, "w") as f:
             f.write(report)
