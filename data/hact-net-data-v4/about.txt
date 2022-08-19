@@ -1,0 +1,5 @@
+graphs generated on the 'latest version' RoI set using the histocartography_hpc_clone conda environment from scratch
+
+Train set: 3657 images
+Val set: 312 images
+Test set: 570 images

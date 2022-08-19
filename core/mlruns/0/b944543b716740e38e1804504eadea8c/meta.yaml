@@ -1,0 +1,15 @@
+artifact_uri: file:///nadeem_lab/Eliram/repos/hact-net/core/mlruns/0/b944543b716740e38e1804504eadea8c/artifacts
+end_time: 1660516387023
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: b944543b716740e38e1804504eadea8c
+run_uuid: b944543b716740e38e1804504eadea8c
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1660516338229
+status: 3
+tags: []
+user_id: liaoc2
