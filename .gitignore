@@ -5,6 +5,10 @@
 *.out
 *.bin
 
+# Models
+mlruns/*
+models/*
+
 # Misc.
 .trash/
 

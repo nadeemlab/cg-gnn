@@ -162,4 +162,3 @@ dependencies:
     - sklearn==0.0
     - threadpoolctl==3.0.0
     - tifffile==2021.11.2
-prefix: /nadeem_lab/miniconda3/envs/hactnet_hpc5
