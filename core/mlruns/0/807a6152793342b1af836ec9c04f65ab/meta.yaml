@@ -1,0 +1,15 @@
+artifact_uri: file:///nadeem_lab/Carlin/hact-net/core/mlruns/0/807a6152793342b1af836ec9c04f65ab/artifacts
+end_time: 1661184935865
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+name: ''
+run_id: 807a6152793342b1af836ec9c04f65ab
+run_uuid: 807a6152793342b1af836ec9c04f65ab
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1661184894037
+status: 3
+tags: []
+user_id: liaoc2

@@ -56,6 +56,10 @@ def parse_arguments():
         default='../data/',
         required=False
     )
+    parser.add_argument(
+        '--disable_stain_norm',
+        action='store_true'
+    )
     return parser.parse_args()
 
 class HACTBuilding:
@@ -128,7 +132,7 @@ class HACTBuilding:
         graph = self.rag_graph_builder.process(superpixels, features)
         return graph, superpixels
 
-    def process(self, image_path, save_path, split):
+    def process(self, image_path, save_path, split, disable_stain_norm=False):
         # 1. get image path
         subdirs = os.listdir(image_path)
         image_fnames = []
@@ -152,12 +156,12 @@ class HACTBuilding:
             if not self._exists(cg_out, tg_out, assign_out) and self._valid_image(nr_pixels):
 
                 # b. stain norm the image 
-                try: 
-                    image = self.normalizer.process(image)
-                except:
-                    print('Warning: {} failed during stain normalization.'.format(image_path))
-                    self.image_ids_failing.append(image_path)
-                    pass
+                if not disable_stain_norm:
+                    try: 
+                        image = self.normalizer.process(image)
+                    except:
+                        print('Warning: {} failed during stain normalization.'.format(image_path))
+                        self.image_ids_failing.append(image_path)
 
                 try: 
                     cell_graph, nuclei_centroid = self._build_cg(image)
@@ -239,4 +243,4 @@ if __name__ == "__main__":
     # 2. generate HACT graphs one-by-one, will automatically
     # run on GPU if available.
     hact_builder = HACTBuilding()
-    hact_builder.process(args.image_path, args.save_path, split)
+    hact_builder.process(args.image_path, args.save_path, split, args.disable_stain_norm)
