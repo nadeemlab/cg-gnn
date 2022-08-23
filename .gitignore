@@ -6,8 +6,8 @@
 *.bin
 
 # Models
-mlruns/*
-models/*
+mlruns/
+models/
 
 # Misc.
 .trash/

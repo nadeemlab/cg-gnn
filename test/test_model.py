@@ -13,7 +13,7 @@ from sklearn.metrics import accuracy_score, f1_score, classification_report
 
 from histocartography.ml import CellGraphModel, TissueGraphModel, HACTModel
 
-from dataloader import make_data_loader
+from ..core.dataloader import make_data_loader
 
 # cuda support
 IS_CUDA = torch.cuda.is_available()
