@@ -1,11 +1,9 @@
 #!/bin/bash
 
-cd /nadeem_lab/Eliram/repos/hact-net/core
-source /nadeem_lab/miniconda3/etc/profile.d/conda.sh 
-conda activate hactnet_hpc4
+conda activate hactnet_hpc
 
-which python
-
-python train.py \
---cg_path /nadeem_lab/Eliram/repos/hact-net/data/hact-net-data2/tissue_graphs/ \
---config_fpath ./config/bracs_tggnn_7_classes_pna.yml -b 8 --in_ram --epochs 60 -l 0.0005
+python /nadeem_lab/Carlin/hact-net/core/train.py \
+--cg_path /nadeem_lab/Carlin/hact-net/data/hact-net-data-v5/tissue_graphs/ \
+--model_path /nadeem_lab/Carlin/hact-net/models/ \
+--config_fpath /nadeem_lab/Carlin/hact-net/core/config/bracs_tggnn_7_classes_pna.yml \
+-b 8 --in_ram --epochs 100 -l 0.0005

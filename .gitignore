@@ -4,6 +4,7 @@
 *.jpg
 *.out
 *.bin
+*.csv
 
 # Models
 mlruns/
