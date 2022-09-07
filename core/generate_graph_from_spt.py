@@ -13,14 +13,6 @@ from sklearn.neighbors import kneighbors_graph
 from pandas import read_csv, DataFrame
 from scipy.spatial.distance import pdist, squareform
 
-
-# BRACS subtype to 7-class label
-TUMOR_TYPE_TO_LABEL = {
-    'Untreated': 0,
-    'Non-complete response': 1,
-    'Complete response': 2
-}
-
 LABEL = "label"
 CENTROID = "centroid"
 FEATURES = "feat"
@@ -29,9 +21,15 @@ FEATURES = "feat"
 def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--spt_csv_path',
+        '--spt_csv_feat_filename',
         type=str,
-        help='Path to the SPT CSV.',
+        help='Path to the SPT features CSV.',
+        required=True
+    )
+    parser.add_argument(
+        '--spt_csv_label_filename',
+        type=str,
+        help='Path to the SPT labels CSV.',
         required=True
     )
     parser.add_argument(
@@ -45,26 +43,36 @@ def parse_arguments():
         '--val_data_prc',
         type=int,
         help='Percentage of data to use as validation and test set, each. Must be between 0% and 50%.',
-        default='15',
+        default=15,
+        required=False
+    )
+    parser.add_argument(
+        '--roi_side_length',
+        type=int,
+        help='Side length in pixels of the ROI areas we wish to generate.',
+        default=800,
         required=False
     )
     return parser.parse_args()
 
 
-def create_graphs_from_spt_csv(spt_csv_filename: str,
+def create_graphs_from_spt_csv(spt_csv_feat_filename: str,
+                               spt_csv_label_filename: str,
                                output_directory: str,
-                               image_size: Tuple[int, int] = (1600, 1600),
+                               image_size: Tuple[int, int] = (800, 800),
                                k: int = 5,
                                thresh: Optional[int] = None
                                ) -> None:
     "Create graphs from a feature, location, and label CSV created from SPT."
 
     # Read in the SPT data and convert the labels from categorical to numeric
-    df_all_specimens: DataFrame = read_csv(spt_csv_filename)
-    df_all_specimens['result'].replace(TUMOR_TYPE_TO_LABEL, inplace=True)
+    df_feat_all_specimens: DataFrame = read_csv(
+        spt_csv_feat_filename, index_col=0)
+    df_label_all_specimens: DataFrame = read_csv(
+        spt_csv_label_filename, index_col=0)
 
     # Split the data by specimen (slide)
-    for specimen, df_specimen in df_all_specimens.groupby('specimen'):
+    for specimen, df_specimen in df_feat_all_specimens.groupby('specimen'):
 
         # Initialize data structures
         bboxes: List[Tuple[int, int, int, int, int, int]] = []
@@ -94,17 +102,16 @@ def create_graphs_from_spt_csv(spt_csv_filename: str,
 
         # Create feature, centroid, and label arrays and then the graph
         df_features = df_specimen.drop(
-            ['center_x', 'center_y', 'specimen', 'result'], axis=1)
-        df_labels = df_specimen[['result']]
+            ['center_x', 'center_y', 'specimen'], axis=1)
+        label: int = df_label_all_specimens.loc[specimen, 'result']
         for i, (x_min, x_max, y_min, y_max, x, y) in enumerate(bboxes):
             df_roi = df_specimen.loc[df_specimen['center_x'].between(
                 x_min, x_max) & df_specimen['center_y'].between(y_min, y_max), ]
             centroids = df_roi[['center_x', 'center_y']].values
             features = df_features.loc[df_roi.index, ].astype(int).values
-            labels = df_labels.loc[df_roi.index, ].values
             roi_name = f'melanoma_{specimen}_{i}_{image_size[0]}x{image_size[1]}_x{x}_y{y}'
             create_and_save_graph(output_directory,
-                                  centroids, features, labels,
+                                  centroids, features, label,
                                   output_name=roi_name,
                                   k=k, thresh=thresh)
             df_roi.reset_index()['histological_structure'].to_csv(
@@ -114,7 +121,7 @@ def create_graphs_from_spt_csv(spt_csv_filename: str,
 
 def create_graph(centroids: np.ndarray,
                  features: torch.Tensor,
-                 labels: np.ndarray,
+                 labels: Optional[np.ndarray] = None,
                  k: int = 5,
                  thresh: Optional[int] = None
                  ) -> dgl.DGLGraph:
@@ -142,9 +149,10 @@ def create_graph(centroids: np.ndarray,
     graph.ndata[FEATURES] = features
 
     # add node labels/features
-    assert labels.shape[0] == centroids.shape[0], \
-        "Number of labels do not match number of nodes"
-    graph.ndata[LABEL] = torch.FloatTensor(labels.astype(float))
+    if labels is not None:
+        assert labels.shape[0] == centroids.shape[0], \
+            "Number of labels do not match number of nodes"
+        graph.ndata[LABEL] = torch.FloatTensor(labels.astype(float))
 
     # build kNN adjacency
     adj = kneighbors_graph(
@@ -167,7 +175,7 @@ def create_graph(centroids: np.ndarray,
 def create_and_save_graph(save_path: Union[str, Path],
                           centroids: np.ndarray,
                           features: torch.Tensor,
-                          labels: np.ndarray,
+                          label: int,
                           output_name: str = None,
                           k: int = 5,
                           thresh: Optional[int] = None
@@ -187,8 +195,9 @@ def create_and_save_graph(save_path: Union[str, Path],
         graph = graphs[0]
     else:
         graph = create_graph(
-            centroids, features, labels, k=k, thresh=thresh)
-        save_graphs(str(output_path), [graph])
+            centroids, features, k=k, thresh=thresh)
+        save_graphs(str(output_path), [graph],
+                    {'label': torch.tensor([label])})
     return graph
 
 
@@ -196,13 +205,13 @@ if __name__ == "__main__":
 
     # Handle inputs
     args = parse_arguments()
-    if not path.exists(args.spt_csv_path):
-        raise ValueError("SPT CSV to read from does not exist.")
+    if not (path.exists(args.spt_csv_feat_filename) and path.exists(args.spt_csv_label_filename)):
+        raise ValueError("SPT CSVs to read from do not exist.")
     if not (0 < args.val_data_prc < 50):
         raise ValueError(
             "Validation/test set percentage must be between 0 and 50.")
     val_prop: float = args.val_data_prc/100
-
+    roi_size: Tuple[int, int] = (args.roi_side_length, args.roi_side_length)
     save_path = path.join(args.save_path)
 
     # Create save directory if it doesn't exist yet
@@ -217,11 +226,12 @@ if __name__ == "__main__":
         if path.isdir(directory) and (len(listdir(directory)) > 0):
             raise RuntimeError(
                 f'{set_type} set directory has already been created. Assuming work is done and terminating.')
-        makedirs(directory)
+        makedirs(directory, exist_ok=True)
         set_directories.append(directory)
 
     # Create the graphs
-    create_graphs_from_spt_csv(args.spt_csv_path, save_path)
+    create_graphs_from_spt_csv(
+        args.spt_csv_feat_filename, args.spt_csv_label_filename, save_path, image_size=roi_size)
 
     # Count up all the nets created and prepare for aggregation
     net_filenames: List[str] = []

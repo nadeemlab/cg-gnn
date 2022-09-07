@@ -18,5 +18,6 @@ gnn_params:
 classification_params:
   num_layers: 2
   hidden_dim: 128
-num_classes: 7
-node_feat_dim: 514
+num_classes: 3
+node_feat_dim: 48
+

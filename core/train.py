@@ -2,17 +2,17 @@
 """
 Script for training CG-GNN, TG-GNN and HACT models
 """
-import torch
-import mlflow
 import os
 import uuid
+import shutil
+import argparse
+
+import torch
+import mlflow
 import yaml
 from tqdm import tqdm
 import mlflow.pytorch
-import numpy as np
 import pandas as pd
-import shutil
-import argparse
 from sklearn.metrics import accuracy_score, f1_score, classification_report
 
 from histocartography.ml import CellGraphModel, TissueGraphModel, HACTModel
@@ -22,7 +22,6 @@ from dataloader import make_data_loader
 # cuda support
 IS_CUDA = torch.cuda.is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
-NODE_DIM = 514
 
 
 def parse_arguments():
@@ -104,6 +103,7 @@ def parse_arguments():
 
     return parser.parse_args()
 
+
 def main(args):
     """
     Train HACTNet, CG-GNN or TG-GNN.
@@ -121,68 +121,79 @@ def main(args):
             'batch_size': args.batch_size
         })
         df = pd.io.json.json_normalize(config)
-        rep = {"graph_building.": "", "model_params.": "", "gnn_params.": ""}  # replacement for shorter key names
+        rep = {"graph_building.": "", "model_params.": "",
+               "gnn_params.": ""}  # replacement for shorter key names
         for i, j in rep.items():
             df.columns = df.columns.str.replace(i, j)
         flatten_config = df.to_dict(orient='records')[0]
         for key, val in flatten_config.items():
             mlflow.log_params({key: str(val)})
 
-    # set path to save checkpoints 
+    # set path to save checkpoints
     model_path = os.path.join(args.model_path, str(uuid.uuid4()))
     os.makedirs(model_path, exist_ok=True)
 
     # make data loaders (train, validation & test)
     train_dataloader = make_data_loader(
-        cg_path=os.path.join(args.cg_path, 'train') if args.cg_path is not None else None,
-        tg_path=os.path.join(args.tg_path, 'train') if args.tg_path is not None else None,
-        assign_mat_path=os.path.join(args.assign_mat_path, 'train') if args.assign_mat_path is not None else None,
+        cg_path=os.path.join(
+            args.cg_path, 'train') if args.cg_path is not None else None,
+        tg_path=os.path.join(
+            args.tg_path, 'train') if args.tg_path is not None else None,
+        assign_mat_path=os.path.join(
+            args.assign_mat_path, 'train') if args.assign_mat_path is not None else None,
         batch_size=args.batch_size,
         load_in_ram=args.in_ram,
     )
     val_dataloader = make_data_loader(
-        cg_path=os.path.join(args.cg_path, 'val') if args.cg_path is not None else None,
-        tg_path=os.path.join(args.tg_path, 'val') if args.tg_path is not None else None,
-        assign_mat_path=os.path.join(args.assign_mat_path, 'val') if args.assign_mat_path is not None else None,
+        cg_path=os.path.join(
+            args.cg_path, 'val') if args.cg_path is not None else None,
+        tg_path=os.path.join(
+            args.tg_path, 'val') if args.tg_path is not None else None,
+        assign_mat_path=os.path.join(
+            args.assign_mat_path, 'val') if args.assign_mat_path is not None else None,
         batch_size=args.batch_size,
         load_in_ram=args.in_ram,
     )
     test_dataloader = make_data_loader(
-        cg_path=os.path.join(args.cg_path, 'test') if args.cg_path is not None else None,
-        tg_path=os.path.join(args.tg_path, 'test') if args.tg_path is not None else None,
-        assign_mat_path=os.path.join(args.assign_mat_path, 'test') if args.assign_mat_path is not None else None,
+        cg_path=os.path.join(
+            args.cg_path, 'test') if args.cg_path is not None else None,
+        tg_path=os.path.join(
+            args.tg_path, 'test') if args.tg_path is not None else None,
+        assign_mat_path=os.path.join(
+            args.assign_mat_path, 'test') if args.assign_mat_path is not None else None,
         batch_size=args.batch_size,
         load_in_ram=args.in_ram,
     )
 
-    # declare model 
-    if 'bracs_cggnn' in args.config_fpath:
+    # declare model
+    if 'cggnn' in args.config_fpath:
         model = CellGraphModel(
             gnn_params=config['gnn_params'],
             classification_params=config['classification_params'],
-            node_dim=NODE_DIM,
-            num_classes=7
+            node_dim=config['node_feat_dim'],
+            num_classes=config['num_classes']
         ).to(DEVICE)
 
-    elif 'bracs_tggnn' in args.config_fpath:
+    elif 'tggnn' in args.config_fpath:
         model = TissueGraphModel(
             gnn_params=config['gnn_params'],
             classification_params=config['classification_params'],
-            node_dim=NODE_DIM,
-            num_classes=7
+            node_dim=config['node_feat_dim'],
+            num_classes=config['num_classes']
         ).to(DEVICE)
 
-    elif 'bracs_hact' in args.config_fpath:
+    elif 'hact' in args.config_fpath:
         model = HACTModel(
             cg_gnn_params=config['cg_gnn_params'],
             tg_gnn_params=config['tg_gnn_params'],
             classification_params=config['classification_params'],
-            cg_node_dim=NODE_DIM,
-            tg_node_dim=NODE_DIM,
-            num_classes=7
+            cg_node_dim=config['node_feat_dim'],
+            tg_node_dim=config['node_feat_dim'],
+            num_classes=config['num_classes']
         ).to(DEVICE)
     else:
-        raise ValueError('Model type not recognized. Options are: TG, CG or HACT.')
+        raise ValueError(
+            'Model type not recognized. Options are: TG, CG or HACT.')
 
     # build optimizer
     optimizer = torch.optim.Adam(
@@ -217,7 +228,7 @@ def main(args):
             loss.backward()
             optimizer.step()
 
-            # 3. log training loss 
+            # 3. log training loss
             if args.logger == 'mlflow':
                 mlflow.log_metric('train_loss', loss.item(), step=step)
 
@@ -247,7 +258,8 @@ def main(args):
             mlflow.log_metric('val_loss', loss, step=step)
         if loss < best_val_loss:
             best_val_loss = loss
-            torch.save(model.state_dict(), os.path.join(model_path, 'model_best_val_loss.pt'))
+            torch.save(model.state_dict(), os.path.join(
+                model_path, 'model_best_val_loss.pt'))
 
         # compute & store accuracy + model
         all_val_preds = all_val_preds.detach().numpy()
@@ -257,15 +269,19 @@ def main(args):
             mlflow.log_metric('val_accuracy', accuracy, step=step)
         if accuracy > best_val_accuracy:
             best_val_accuracy = accuracy
-            torch.save(model.state_dict(), os.path.join(model_path, 'model_best_val_accuracy.pt'))
+            torch.save(model.state_dict(), os.path.join(
+                model_path, 'model_best_val_accuracy.pt'))
 
         # compute & store weighted f1-score + model
-        weighted_f1_score = f1_score(all_val_labels, all_val_preds, average='weighted')
+        weighted_f1_score = f1_score(
+            all_val_labels, all_val_preds, average='weighted')
         if args.logger == 'mlflow':
-            mlflow.log_metric('val_weighted_f1_score', weighted_f1_score, step=step)
+            mlflow.log_metric('val_weighted_f1_score',
+                              weighted_f1_score, step=step)
         if weighted_f1_score > best_val_weighted_f1_score:
             best_val_weighted_f1_score = weighted_f1_score
-            torch.save(model.state_dict(), os.path.join(model_path, 'model_best_val_weighted_f1_score.pt'))
+            torch.save(model.state_dict(), os.path.join(
+                model_path, 'model_best_val_weighted_f1_score.pt'))
 
         print('Val loss {}'.format(loss))
         print('Val weighted F1 score {}'.format(weighted_f1_score))
@@ -274,10 +290,11 @@ def main(args):
     # testing loop
     model.eval()
     for metric in ['best_val_loss', 'best_val_accuracy', 'best_val_weighted_f1_score']:
-        
+
         print('\n*** Start testing w/ {} model ***'.format(metric))
 
-        model_name = [f for f in os.listdir(model_path) if f.endswith(".pt") and metric in f][0]
+        model_name = [f for f in os.listdir(
+            model_path) if f.endswith(".pt") and metric in f][0]
         model.load_state_dict(torch.load(os.path.join(model_path, model_name)))
 
         all_test_logits = []
@@ -305,15 +322,19 @@ def main(args):
         all_test_labels = all_test_labels.detach().numpy()
         accuracy = accuracy_score(all_test_labels, all_test_preds)
         if args.logger == 'mlflow':
-            mlflow.log_metric('best_test_accuracy_' + metric, accuracy, step=step)
+            mlflow.log_metric('best_test_accuracy_' +
+                              metric, accuracy, step=step)
 
         # compute & store weighted f1-score
-        weighted_f1_score = f1_score(all_test_labels, all_test_preds, average='weighted')
+        weighted_f1_score = f1_score(
+            all_test_labels, all_test_preds, average='weighted')
         if args.logger == 'mlflow':
-            mlflow.log_metric('best_test_weighted_f1_score_' + metric, weighted_f1_score, step=step)
+            mlflow.log_metric('best_test_weighted_f1_score_' +
+                              metric, weighted_f1_score, step=step)
 
-        # compute and store classification report 
-        report = classification_report(all_test_labels, all_test_preds, digits=4)
+        # compute and store classification report
+        report = classification_report(
+            all_test_labels, all_test_preds, digits=4)
         out_path = os.path.join(model_path, 'classification_report.txt')
         with open(out_path, "w") as f:
             f.write(report)
@@ -328,7 +349,6 @@ def main(args):
         print('Test loss {}'.format(loss))
         print('Test weighted F1 score {}'.format(weighted_f1_score))
         print('Test accuracy {}'.format(accuracy))
-
 
     if args.logger == 'mlflow':
         shutil.rmtree(model_path)
