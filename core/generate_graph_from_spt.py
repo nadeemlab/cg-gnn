@@ -1,9 +1,10 @@
-"TODO: docstring"
+"Queries the SPT server for cell-level data and slide-level labels and saves them to CSVs."
 from os import path, makedirs, listdir, replace
-import logging
-import argparse
+from logging import info
+from argparse import ArgumentParser
 from pathlib import Path
-from random import shuffle
+from random import shuffle, randint
+from warnings import warn
 from typing import Optional, Tuple, Union, List, Dict
 
 import dgl
@@ -20,7 +21,7 @@ FEATURES = "feat"
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser()
+    parser = ArgumentParser()
     parser.add_argument(
         '--spt_csv_feat_filename',
         type=str,
@@ -52,7 +53,7 @@ def parse_arguments():
         '--roi_side_length',
         type=int,
         help='Side length in pixels of the ROI areas we wish to generate.',
-        default=800,
+        default=600,
         required=False
     )
     return parser.parse_args()
@@ -61,10 +62,10 @@ def parse_arguments():
 def create_graphs_from_spt_csv(spt_csv_feat_filename: str,
                                spt_csv_label_filename: str,
                                output_directory: str,
-                               image_size: Tuple[int, int] = (800, 800),
+                               image_size: Tuple[int, int],
                                k: int = 5,
                                thresh: Optional[int] = None
-                               ) -> Dict[str, List[str]]:
+                               ) -> Dict[int, List[List[str]]]:
     "Create graphs from a feature, location, and label CSV created from SPT."
 
     # Read in the SPT data and convert the labels from categorical to numeric
@@ -123,7 +124,13 @@ def create_graphs_from_spt_csv(spt_csv_feat_filename: str,
                           f'{roi_name}_hist_structs.csv'))
             filenames[specimen].append(f'{roi_name}.bin')
 
-    return filenames
+    # Split the graphs by specimen and label
+    specimen_graphs_by_label: Dict[int, List[List[str]]] = {
+        i: [] for i in df_label_all_specimens['result'].unique()}
+    for specimen, specimen_files in filenames.items():
+        specimen_graphs_by_label[df_label_all_specimens.loc[specimen, 'result']
+                                 ].append(specimen_files)
+    return specimen_graphs_by_label
 
 
 def create_graph(centroids: np.ndarray,
@@ -194,9 +201,7 @@ def create_and_save_graph(save_path: Union[str, Path],
     """
     output_path = Path(save_path) / f"{output_name}.bin"
     if output_path.exists():
-        logging.info(
-            f"Output of {output_name} already exists, using it instead of recomputing"
-        )
+        info("Output of %s already exists, using it instead of recomputing" % output_name)
         graphs, _ = load_graphs(str(output_path))
         assert len(graphs) == 1
         graph = graphs[0]
@@ -206,6 +211,72 @@ def create_and_save_graph(save_path: Union[str, Path],
         save_graphs(str(output_path), [graph],
                     {'label': torch.tensor([label])})
     return graph
+
+
+def split_rois(graphs_by_specimen_and_label: Dict[int, List[List[str]]],
+               p_val: float) -> Tuple[List[str], List[str], List[str]]:
+    "Randomly allocate graphs to train, val, and test sets."
+    train_files: List[str] = []
+    val_files: List[str] = []
+    test_files: List[str] = []
+    p_train = 1 - 2*p_val
+
+    # Shuffle the order of the specimens in each class and divvy them up.
+    for label, graph_files_by_specimen in graphs_by_specimen_and_label.items():
+        n_graphs = sum(len(l) for l in graph_files_by_specimen)
+        if n_graphs == 0:
+            warn(f'Class {label} doesn\'t have any examples.')
+            continue
+        shuffle(graph_files_by_specimen)
+
+        # If there's at least one specimen of this class, add it to the training set.
+        train_files += graph_files_by_specimen[0]
+        n_specimens = len(graph_files_by_specimen)
+        if n_specimens == 1:
+            warn(
+                f'Class {label} only has one specimen. Allocating to training set.')
+        elif n_specimens == 2:
+            warn(f'Class {label} only has two specimens. '
+                 'Allocating one to training set and the other randomly to val or test.')
+            if randint(0, 1) == 0:
+                val_files += graph_files_by_specimen[1]
+            else:
+                test_files += graph_files_by_specimen[1]
+        else:
+            # First, allocate at least one example to each of the val and test sets.
+            val_files += graph_files_by_specimen[1]
+            test_files += graph_files_by_specimen[2]
+
+            # Calculate the number of ROIs we want in the train/test/val sets, correcting for how
+            # there's already one specimen allocated to each.
+            n_train = n_graphs*p_train - len(graph_files_by_specimen[0])
+            n_val = n_graphs*p_val - len(graph_files_by_specimen[1])
+            n_test = n_graphs*p_val - len(graph_files_by_specimen[2])
+            if (n_train < 0) or (n_val < 0) or (n_test < 0):
+                which_sets: List[str] = []
+                if n_train < 0:
+                    which_sets.append('train')
+                if n_val < 0:
+                    which_sets.append('val')
+                if n_test < 0:
+                    which_sets.append('test')
+                warn(f'Class {label} doesn\'t have enough specimens to maintain the specified '
+                     f'{"/".join(which_sets)} proportion. Consider adding more samples of this '
+                     'class and/or increasing their allocation percentage.')
+            n_used_of_remainder = 0
+
+            # Finish the allocation.
+            # This method prioritizes bolstering the training and validation sets in that order.
+            for specimen_files in graph_files_by_specimen[3:]:
+                if n_used_of_remainder < n_train:
+                    train_files += specimen_files
+                elif n_used_of_remainder < n_train + n_val:
+                    val_files += specimen_files
+                else:
+                    test_files += specimen_files
+                n_used_of_remainder += len(specimen_files)
+
+    return train_files, val_files, test_files
 
 
 if __name__ == "__main__":
@@ -239,33 +310,11 @@ if __name__ == "__main__":
         set_directories.append(directory)
 
     # Create the graphs
-    graph_filenames = create_graphs_from_spt_csv(
+    graphs_by_specimen_and_label = create_graphs_from_spt_csv(
         args.spt_csv_feat_filename, args.spt_csv_label_filename, save_path, image_size=roi_size)
 
-    # Randomly allocate graphs to train, val, and test sets
-    n_graphs = sum(len(l) for l in graph_filenames.values())
-    n_train = max(n_graphs*(1 - 2*val_prop), 1)
-    n_val = n_test = max(n_graphs*val_prop, 1)
-    n_used: int = 0
-    train_files: List[str] = []
-    val_files: List[str] = []
-    test_files: List[str] = []
-    all_specimen_files = list(graph_filenames.values())
-    shuffle(all_specimen_files)
-    for specimen_files in all_specimen_files:
-        if n_used < n_train:
-            train_files += specimen_files
-        elif n_used < n_train + n_val:
-            val_files += specimen_files
-        else:
-            test_files += specimen_files
-        n_used += len(specimen_files)
-    assert (len(train_files) > 0), 'Training data allocation percentage too low.'
-    assert (len(val_files) > 0) and (len(test_files) > 0), \
-        'Val/test data allocation percentage too low.'
-
     # Move the train, val, and test sets into their own dedicated folders
-    sets_data = (train_files, val_files, test_files)
+    sets_data = split_rois(graphs_by_specimen_and_label, val_prop)
     for i in range(3):
         for filename in sets_data[i]:
             replace(path.join(save_path, filename),
