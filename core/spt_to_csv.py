@@ -16,9 +16,8 @@ from shapefile import Reader
 
 # Treatment response to label
 RESPONSE_TO_LABEL = {
-    'Untreated': 0,
-    'Non-complete response': 1,
-    'Complete response': 2
+    'Non-responder': 0,
+    'Extreme responder': 1
 }
 
 
@@ -74,8 +73,11 @@ def get_targets(conn) -> DataFrame:
                 ON hsi.data_source=df.sha256_hash
             JOIN specimen_data_measurement_process sdmp
                 ON df.source_generation_process=sdmp.identifier
+            JOIN histology_assessment_process hap
+                ON sdmp.specimen=hap.slide
         WHERE
-            sdmp.study='Melanoma intralesional IL2 (Hollmann lab) - measurement'
+            sdmp.study='Melanoma intralesional IL2 (Hollmann lab) - measurement' AND
+            hap.result='Untreated'
         ORDER BY sdmp.specimen, eq.histological_structure, eq.target;
     """, conn)
     df_targets['histological_structure'] = df_targets['histological_structure'].astype(
@@ -113,8 +115,11 @@ def get_shape_strings(conn) -> DataFrame:
                 ON hsi.data_source=df.sha256_hash
             JOIN specimen_data_measurement_process sdmp
                 ON df.source_generation_process=sdmp.identifier
+            JOIN histology_assessment_process hap
+                ON sdmp.specimen=hap.slide
         WHERE
-            sdmp.study='Melanoma intralesional IL2 (Hollmann lab) - measurement'
+            sdmp.study='Melanoma intralesional IL2 (Hollmann lab) - measurement' AND
+            hap.result='Untreated'
         ORDER BY histological_structure;
     """, conn)
     df_shapes['histological_structure'] = df_shapes['histological_structure'].astype(
@@ -184,8 +189,19 @@ def create_feature_df(df_targets: DataFrame, df_phenotypes: DataFrame, df_shapes
 
 def create_label_df(conn) -> DataFrame:
     "Get slide-level results."
-    return read_sql("SELECT slide, result FROM histology_assessment_process;",
-                    conn).set_index('slide').replace(RESPONSE_TO_LABEL)
+    return read_sql("""
+        SELECT 
+            slide,
+            d.result
+        FROM histology_assessment_process hap
+            JOIN specimen_collection_process scp
+                ON scp.specimen=hap.slide
+            JOIN diagnosis d
+                ON scp.source=d.subject
+        WHERE
+            hap.result='Untreated' AND
+            scp.study='Melanoma intralesional IL2 (Hollmann lab) - specimen collection';
+    """, conn).set_index('slide').replace(RESPONSE_TO_LABEL)
 
 
 if __name__ == "__main__":
