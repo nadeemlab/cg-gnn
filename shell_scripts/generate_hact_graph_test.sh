@@ -1,9 +1,8 @@
 #!/bin/bash
 
-conda activate hactnet_hpc
+conda activate hact
 
-python /nadeem_lab/Carlin/hact-net/core/generate_hact_graphs.py \
---disable_stain_norm \
---image_path /nadeem_lab/datasets/BRACS_RoI/latest_version/test/ \
+python /nadeem_lab/Carlin/hact-net/hact-net/generate_hact_graphs.py \
+--image_path /nadeem_lab/data/external_downloads/BRACS_RoI/latest_version/test/ \
 --save_path /nadeem_lab/Carlin/hact-net/data/hact-net-data-v6/ \
 --disable_stain_norm
