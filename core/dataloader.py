@@ -1,27 +1,30 @@
 """BRACS Dataset loader."""
-import os
-import h5py
-import torch.utils.data
-import numpy as np
+from os.path import join
+from glob import glob
+
+from h5py import File
+from torch import LongTensor, from_numpy
+from torch.cuda import is_available
+from torch.utils.data import Dataset, DataLoader
+from numpy import array
+from dgl import batch
 from dgl.data.utils import load_graphs
-from torch.utils.data import Dataset
-from glob import glob 
-import dgl 
 
 from histocartography.utils import set_graph_on_cuda
 
 
-IS_CUDA = torch.cuda.is_available()
+IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
 COLLATE_FN = {
-    'DGLGraph': lambda x: dgl.batch(x),
+    'DGLGraph': lambda x: batch(x),
     'Tensor': lambda x: x,
-    'int': lambda x: torch.LongTensor(x).to(DEVICE)
+    'int': lambda x: LongTensor(x).to(DEVICE)
 }
 
+
 def h5_to_tensor(h5_path):
-    h5_object = h5py.File(h5_path, 'r')
-    out = torch.from_numpy(np.array(h5_object['assignment_matrix']))
+    h5_object = File(h5_path, 'r')
+    out = from_numpy(array(h5_object['assignment_matrix']))
     return out
 
 
@@ -46,7 +49,8 @@ class BRACSDataset(Dataset):
         """
         super(BRACSDataset, self).__init__()
 
-        assert not (cg_path is None and tg_path is None), "You must provide path to at least 1 modality."
+        assert not (
+            cg_path is None and tg_path is None), "You must provide path to at least 1 modality."
 
         self.cg_path = cg_path
         self.tg_path = tg_path
@@ -66,37 +70,42 @@ class BRACSDataset(Dataset):
         """
         Load cell graphs
         """
-        self.cg_fnames = glob(os.path.join(self.cg_path, '*.bin'))
+        self.cg_fnames = glob(join(self.cg_path, '*.bin'))
         self.cg_fnames.sort()
         self.num_cg = len(self.cg_fnames)
         if self.load_in_ram:
-            cell_graphs = [load_graphs(os.path.join(self.cg_path, fname)) for fname in self.cg_fnames]
+            cell_graphs = [load_graphs(join(
+                self.cg_path, fname)) for fname in self.cg_fnames]
             self.cell_graphs = [entry[0][0] for entry in cell_graphs]
-            self.cell_graph_labels = [entry[1]['label'].item() for entry in cell_graphs]
+            self.cell_graph_labels = [
+                entry[1]['label'].item() for entry in cell_graphs]
 
     def _load_tg(self):
         """
         Load tissue graphs
         """
-        self.tg_fnames = glob(os.path.join(self.tg_path, '*.bin'))
+        self.tg_fnames = glob(join(self.tg_path, '*.bin'))
         self.tg_fnames.sort()
         self.num_tg = len(self.tg_fnames)
         if self.load_in_ram:
-            tissue_graphs = [load_graphs(os.path.join(self.tg_path, fname)) for fname in self.tg_fnames]
+            tissue_graphs = [load_graphs(join(
+                self.tg_path, fname)) for fname in self.tg_fnames]
             self.tissue_graphs = [entry[0][0] for entry in tissue_graphs]
-            self.tissue_graph_labels = [entry[1]['label'].item() for entry in tissue_graphs]
+            self.tissue_graph_labels = [
+                entry[1]['label'].item() for entry in tissue_graphs]
 
     def _load_assign_mat(self):
         """
         Load assignment matrices 
         """
-        self.assign_fnames = glob(os.path.join(self.assign_mat_path, '*.h5'))
+        self.assign_fnames = glob(join(self.assign_mat_path, '*.h5'))
         self.assign_fnames.sort()
         self.num_assign_mat = len(self.assign_fnames)
         if self.load_in_ram:
             self.assign_matrices = [
-                h5_to_tensor(os.path.join(self.assign_mat_path, fname)).float().t()
-                    for fname in self.assign_fnames
+                h5_to_tensor(join(
+                    self.assign_mat_path, fname)).float().t()
+                for fname in self.assign_fnames
             ]
 
     def __getitem__(self, index):
@@ -112,7 +121,8 @@ class BRACSDataset(Dataset):
                 cg = self.cell_graphs[index]
                 tg = self.tissue_graphs[index]
                 assign_mat = self.assign_matrices[index]
-                assert self.cell_graph_labels[index] == self.tissue_graph_labels[index], "The CG and TG are not the same. There was an issue while creating HACT."
+                assert self.cell_graph_labels[index] == self.tissue_graph_labels[
+                    index], "The CG and TG are not the same. There was an issue while creating HACT."
                 label = self.cell_graph_labels[index]
             else:
                 cg, label = load_graphs(self.cg_fnames[index])
@@ -120,7 +130,8 @@ class BRACSDataset(Dataset):
                 label = label['label'].item()
                 tg, _ = load_graphs(self.tg_fnames[index])
                 tg = tg[0]
-                assign_mat = h5_to_tensor(self.assign_fnames[index]).float().t()
+                assign_mat = h5_to_tensor(
+                    self.assign_fnames[index]).float().t()
 
             cg = set_graph_on_cuda(cg) if IS_CUDA else cg
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
@@ -128,7 +139,7 @@ class BRACSDataset(Dataset):
 
             return cg, tg, assign_mat, label
 
-        # 2. TG-GNN configuration 
+        # 2. TG-GNN configuration
         elif hasattr(self, 'num_tg'):
             if self.load_in_ram:
                 tg = self.tissue_graphs[index]
@@ -140,7 +151,7 @@ class BRACSDataset(Dataset):
             tg = set_graph_on_cuda(tg) if IS_CUDA else tg
             return tg, label
 
-        # 3. CG-GNN configuration 
+        # 3. CG-GNN configuration
         else:
             if self.load_in_ram:
                 cg = self.cell_graphs[index]
@@ -173,7 +184,8 @@ def collate(batch):
         return COLLATE_FN[type]([example[id] for example in batch])
 
     # collate the data
-    num_modalities = len(batch[0])  # should 2 if CG or TG processing or 4 if HACT
+    # should 2 if CG or TG processing or 4 if HACT
+    num_modalities = len(batch[0])
     batch = tuple([collate_fn(batch, mod_id, type(batch[0][mod_id]).__name__)
                   for mod_id in range(num_modalities)])
 
@@ -181,22 +193,22 @@ def collate(batch):
 
 
 def make_data_loader(
-        batch_size,
-        shuffle=True,
-        num_workers=0,
-        **kwargs
-    ):
+    batch_size,
+    shuffle=True,
+    num_workers=0,
+    **kwargs
+):
     """
     Create a BRACS data loader.
     """
 
     dataset = BRACSDataset(**kwargs)
-    dataloader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            num_workers=num_workers,
-            collate_fn=collate
-        )
+    dataloader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=shuffle,
+        num_workers=num_workers,
+        collate_fn=collate
+    )
 
     return dataloader

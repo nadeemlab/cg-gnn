@@ -18,7 +18,6 @@ from histocartography.preprocessing import (
     DeepFeatureExtractor,            # feature extractor 
     KNNGraphBuilder,                 # kNN graph builder
     ColorMergedSuperpixelExtractor,  # tissue detector
-    DeepFeatureExtractor,            # feature extractor
     RAGGraphBuilder,                 # build graph
     AssignmnentMatrixBuilder         # assignment matrix 
 )
