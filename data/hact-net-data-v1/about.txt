@@ -1,2 +1,0 @@
-These are previously generated graphs used in the hact-net paper. 
-They were downloaded from the hactnet github issue (first link): https://github.com/histocartography/hact-net/issues/1#issuecomment-954083032 
