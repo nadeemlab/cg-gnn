@@ -2,32 +2,28 @@
 """
 Script for testing CG-GNN, TG-GNN and HACT models
 """
-import torch
-import mlflow
-import os
-import pickle
-import uuid
-import yaml
-from tqdm import tqdm
-import mlflow.pytorch
-import numpy as np
-import pandas as pd
-import shutil
-import argparse
+
+from os.path import join
+from argparse import ArgumentParser
+
+from yaml import safe_load
+from torch import load, no_grad, argmax, cat
+from torch.cuda import is_available
+from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, classification_report
-import mlflow.pytorch
+from tqdm import tqdm
 
 from histocartography.ml import CellGraphModel, TissueGraphModel, HACTModel
 
-from dataloader import make_data_loader
+from util import CGTGDataset, collate
 
 # cuda support
-IS_CUDA = torch.cuda.is_available()
+IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
-NODE_DIM = 514
 
 def parse_arguments():
-    parser = argparse.ArgumentParser()
+    "Parse command line arguments."
+    parser = ArgumentParser()
     parser.add_argument(
         '--cg_path',
         type=str,
@@ -95,17 +91,22 @@ def main(args):
     assert (args.pretrained or args.model_path is not None), "Provide either a model path or set pretrained."
 
     # load config file
-    with open(args.config_fpath, 'r') as f:
-        config = yaml.safe_load(f)
+    with open(args.config_fpath, 'r', encoding='utf-8') as f:
+        config = safe_load(f)
 
-    # make test data loaders 
-    dataloader = make_data_loader(
-        cg_path=os.path.join(args.cg_path, 'test') if args.cg_path is not None else None,
-        tg_path=os.path.join(args.tg_path, 'test') if args.tg_path is not None else None,
-        assign_mat_path=os.path.join(args.assign_mat_path, 'test') if args.assign_mat_path is not None else None,
+    # make test data loader
+    dataloader = DataLoader(
+        CGTGDataset(
+            cg_path=join(
+                args.cg_path, 'train') if args.cg_path is not None else None,
+            tg_path=join(
+                args.tg_path, 'train') if args.tg_path is not None else None,
+            assign_mat_path=join(
+                args.assign_mat_path, 'train') if args.assign_mat_path is not None else None,
+            load_in_ram=args.in_ram
+        ),
         batch_size=args.batch_size,
-        load_in_ram=args.in_ram,
-        shuffle=False
+        collate_fn=collate
     )
 
     # declare model 
@@ -113,7 +114,7 @@ def main(args):
         model = CellGraphModel(
             gnn_params=config['gnn_params'],
             classification_params=config['classification_params'],
-            node_dim=NODE_DIM,
+            node_dim=config['node_feat_dim'],
             num_classes=7,
             pretrained=args.pretrained
         ).to(DEVICE)
@@ -122,7 +123,7 @@ def main(args):
         model = TissueGraphModel(
             gnn_params=config['gnn_params'],
             classification_params=config['classification_params'],
-            node_dim=NODE_DIM,
+            node_dim=config['node_feat_dim'],
             num_classes=7,
             pretrained=args.pretrained
         ).to(DEVICE)
@@ -132,8 +133,8 @@ def main(args):
             cg_gnn_params=config['cg_gnn_params'],
             tg_gnn_params=config['tg_gnn_params'],
             classification_params=config['classification_params'],
-            cg_node_dim=NODE_DIM,
-            tg_node_dim=NODE_DIM,
+            cg_node_dim=config['node_feat_dim'],
+            tg_node_dim=config['node_feat_dim'],
             num_classes=7,
             pretrained=args.pretrained
         ).to(DEVICE)
@@ -142,7 +143,7 @@ def main(args):
 
     # load weights if model path is provided. 
     if not args.pretrained:
-        model.load_state_dict(torch.load(args.model_path))
+        model.load_state_dict(load(args.model_path))
     model.eval()
 
     # print # of parameters
@@ -155,14 +156,14 @@ def main(args):
     for batch in tqdm(dataloader, desc='Testing', unit='batch'):
         labels = batch[-1]
         data = batch[:-1]
-        with torch.no_grad():
+        with no_grad():
             logits = model(*data)
         all_test_logits.append(logits)
         all_test_labels.append(labels)
 
-    all_test_logits = torch.cat(all_test_logits).cpu()
-    all_test_preds = torch.argmax(all_test_logits, dim=1)
-    all_test_labels = torch.cat(all_test_labels).cpu()
+    all_test_logits = cat(all_test_logits).cpu()
+    all_test_preds = argmax(all_test_logits, dim=1)
+    all_test_labels = cat(all_test_labels).cpu()
 
     all_test_preds = all_test_preds.detach().numpy()
     all_test_labels = all_test_labels.detach().numpy()
@@ -171,9 +172,9 @@ def main(args):
     weighted_f1_score = f1_score(all_test_labels, all_test_preds, average='weighted')
     report = classification_report(all_test_labels, all_test_preds)
 
-    print('Test weighted F1 score {}'.format(weighted_f1_score))
-    print('Test accuracy {}'.format(accuracy))
-    print('Test classification report {}'.format(report))
+    print(f'Test weighted F1 score {weighted_f1_score}')
+    print(f'Test accuracy {accuracy}')
+    print(f'Test classification report {report}')
 
 
 if __name__ == "__main__":

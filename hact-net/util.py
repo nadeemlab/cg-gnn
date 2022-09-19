@@ -1,24 +1,24 @@
-"""BRACS Dataset loader."""
+"""Cell/tissue graph dataset utility functions."""
 from os.path import join
 from glob import glob
 
 from h5py import File
 from torch import LongTensor, from_numpy
 from torch.cuda import is_available
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from numpy import array
 from dgl import batch
 from dgl.data.utils import load_graphs
-
-from histocartography.utils import set_graph_on_cuda
 
 
 IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
 COLLATE_FN = {
     'DGLGraph': lambda x: batch(x),
+    'DGLHeteroGraph': lambda x: batch(x),
     'Tensor': lambda x: x,
-    'int': lambda x: LongTensor(x).to(DEVICE)
+    'int': lambda x: LongTensor(x).to(DEVICE),
+    'float': lambda x: LongTensor(x).to(DEVICE)
 }
 
 
@@ -28,8 +28,8 @@ def h5_to_tensor(h5_path):
     return out
 
 
-class BRACSDataset(Dataset):
-    """BRACS dataset."""
+class CGTGDataset(Dataset):
+    """Cell/tissue graph dataset."""
 
     def __init__(
             self,
@@ -39,7 +39,7 @@ class BRACSDataset(Dataset):
             load_in_ram: bool = False,
     ):
         """
-        BRACS dataset constructor.
+        Cell graph and tissue graph dataset constructor.
 
         Args:
             cg_path (str, optional): Cell Graph path to a given split (eg, cell_graphs/test/). Defaults to None.
@@ -47,7 +47,7 @@ class BRACSDataset(Dataset):
             assign_mat_path (str, optional): Assignment matrices path. Defaults to None.
             load_in_ram (bool, optional): Loading data in RAM. Defaults to False.
         """
-        super(BRACSDataset, self).__init__()
+        super(CGTGDataset, self).__init__()
 
         assert not (
             cg_path is None and tg_path is None), "You must provide path to at least 1 modality."
@@ -133,8 +133,9 @@ class BRACSDataset(Dataset):
                 assign_mat = h5_to_tensor(
                     self.assign_fnames[index]).float().t()
 
-            cg = set_graph_on_cuda(cg) if IS_CUDA else cg
-            tg = set_graph_on_cuda(tg) if IS_CUDA else tg
+            if IS_CUDA:
+                cg = cg.to('cuda:0')
+                tg = tg.to('cuda:0')
             assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
 
             return cg, tg, assign_mat, label
@@ -148,7 +149,8 @@ class BRACSDataset(Dataset):
                 tg, label = load_graphs(self.tg_fnames[index])
                 label = label['label'].item()
                 tg = tg[0]
-            tg = set_graph_on_cuda(tg) if IS_CUDA else tg
+            if IS_CUDA:
+                tg = tg.to('cuda:0')
             return tg, label
 
         # 3. CG-GNN configuration
@@ -160,11 +162,12 @@ class BRACSDataset(Dataset):
                 cg, label = load_graphs(self.cg_fnames[index])
                 label = label['label'].item()
                 cg = cg[0]
-            cg = set_graph_on_cuda(cg) if IS_CUDA else cg
+            if IS_CUDA:
+                cg = cg.to('cuda:0')
             return cg, label
 
     def __len__(self):
-        """Return the number of samples in the BRACS dataset."""
+        """Return the number of samples in the dataset."""
         if hasattr(self, 'num_cg'):
             return self.num_cg
         else:
@@ -190,25 +193,3 @@ def collate(batch):
                   for mod_id in range(num_modalities)])
 
     return batch
-
-
-def make_data_loader(
-    batch_size,
-    shuffle=True,
-    num_workers=0,
-    **kwargs
-):
-    """
-    Create a BRACS data loader.
-    """
-
-    dataset = BRACSDataset(**kwargs)
-    dataloader = DataLoader(
-        dataset,
-        batch_size=batch_size,
-        shuffle=shuffle,
-        num_workers=num_workers,
-        collate_fn=collate
-    )
-
-    return dataloader

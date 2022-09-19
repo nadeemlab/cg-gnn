@@ -9,7 +9,7 @@ from typing import Optional, Tuple, Union, List, Dict
 
 from torch import Tensor, FloatTensor, is_tensor
 from numpy import ndarray, round, prod, percentile, argmin, nonzero
-from dgl import DGLGraph
+from dgl import DGLGraph, graph
 from dgl.data.utils import load_graphs, save_graphs
 from sklearn.neighbors import kneighbors_graph
 from pandas import read_csv, DataFrame
@@ -162,22 +162,22 @@ def create_graph(centroids: ndarray,
 
     # add nodes
     num_nodes = features.shape[0]
-    graph = DGLGraph()
-    graph.add_nodes(num_nodes)
-    graph.ndata[CENTROID] = FloatTensor(centroids)
+    graph_instance = graph([])
+    graph_instance.add_nodes(num_nodes)
+    graph_instance.ndata[CENTROID] = FloatTensor(centroids)
 
     # add node features
     if not is_tensor(features):
         features = FloatTensor(features)
-    graph.ndata[FEATURES] = features
+    graph_instance.ndata[FEATURES] = features
 
     # add node labels/features
     if labels is not None:
         assert labels.shape[0] == centroids.shape[0], \
             "Number of labels do not match number of nodes"
-        graph.ndata[LABEL] = FloatTensor(labels.astype(float))
-        graph.ndata[LABEL] = FloatTensor(labels.astype(float))
-        graph.ndata[LABEL] = FloatTensor(labels.astype(float))
+        graph_instance.ndata[LABEL] = FloatTensor(labels.astype(float))
+        graph_instance.ndata[LABEL] = FloatTensor(labels.astype(float))
+        graph_instance.ndata[LABEL] = FloatTensor(labels.astype(float))
 
     # build kNN adjacency
     adj = kneighbors_graph(
@@ -192,9 +192,9 @@ def create_graph(centroids: ndarray,
         adj[adj > thresh] = 0
 
     edge_list = nonzero(adj)
-    graph.add_edges(list(edge_list[0]), list(edge_list[1]))
+    graph_instance.add_edges(list(edge_list[0]), list(edge_list[1]))
 
-    return graph
+    return graph_instance
 
 
 def create_and_save_graph(save_path: Union[str, Path],
@@ -216,13 +216,13 @@ def create_and_save_graph(save_path: Union[str, Path],
             f"Output of {output_name} already exists, using it instead of recomputing")
         graphs, _ = load_graphs(str(output_path))
         assert len(graphs) == 1
-        graph = graphs[0]
+        graph_instance = graphs[0]
     else:
-        graph = create_graph(
+        graph_instance = create_graph(
             centroids, features, k=k, thresh=thresh)
-        save_graphs(str(output_path), [graph],
+        save_graphs(str(output_path), [graph_instance],
                     {'label': Tensor([label])})
-    return graph
+    return graph_instance
 
 
 def split_rois(graphs_by_specimen_and_label: Dict[int, List[List[str]]],
@@ -337,9 +337,9 @@ if __name__ == "__main__":
     # been created and populated
     set_directories: List[str] = []
     for set_type in ('train', 'val', 'test'):
-        if (set_type is 'val') and (val_prop == 0):
+        if (set_type == 'val') and (val_prop == 0):
             continue
-        if (set_type is 'test') and (test_prop == 0):
+        if (set_type == 'test') and (test_prop == 0):
             continue
         directory = path.join(save_path, set_type)
         if path.isdir(directory) and (len(listdir(directory)) > 0):
