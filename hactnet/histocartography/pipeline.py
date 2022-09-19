@@ -13,7 +13,7 @@ import h5py
 import pandas as pd
 from tqdm.auto import tqdm
 
-from histocartography.utils import dynamic_import_from, signal_last
+from hactnet.histocartography.utils import dynamic_import_from, signal_last
 
 
 class PipelineStep(ABC):

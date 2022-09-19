@@ -437,7 +437,8 @@ def main(args):
                 log_artifact(out_path, artifact_path=artifact_path)
 
             # log MLflow models
-            log_model(model, 'model_' + metric)
+            if args.logger == 'mlflow':
+                log_model(model, 'model_' + metric)
 
             print(f'Test loss {loss}')
             print(f'Test weighted F1 score {weighted_f1_score}')
