@@ -5,10 +5,11 @@
 *.out
 *.bin
 *.csv
+*.txt
 
 # Models
 mlruns/
-models/
+models/*
 
 # Misc.
 .trash/
