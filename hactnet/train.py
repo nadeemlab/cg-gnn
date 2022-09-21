@@ -6,7 +6,7 @@ from os import makedirs, listdir
 from os.path import exists, join
 from uuid import uuid4
 from shutil import rmtree
-from typing import Callable, List, Tuple, Optional, Any, Sequence, TYPE_CHECKING
+from typing import Callable, List, Tuple, Optional, Any, Sequence
 
 from yaml import safe_load
 from pandas.io.json import json_normalize
@@ -170,13 +170,14 @@ def _train_step(model: BaseModel,
                 loss_fn: Callable,
                 optimizer: Optimizer,
                 epoch: int,
+                fold: int,
                 step: int,
                 logger: str = None
                 ) -> Tuple[BaseModel, int]:
     "Train for 1 epoch/fold."
 
     model.train()
-    for batch in tqdm(train_dataloader, desc=f'Epoch training {epoch}', unit='batch'):
+    for batch in tqdm(train_dataloader, desc=f'Epoch training {epoch}, fold {fold}', unit='batch'):
 
         # 1. forward pass
         labels = batch[-1]
@@ -204,6 +205,7 @@ def _val_step(model: BaseModel,
               loss_fn: Callable,
               model_path: str,
               epoch: int,
+              fold: int,
               step: int,
               best_val_loss: float,
               best_val_accuracy: float,
@@ -215,7 +217,7 @@ def _val_step(model: BaseModel,
     model.eval()
     all_val_logits = []
     all_val_labels = []
-    for batch in tqdm(val_dataloader, desc=f'Epoch validation {epoch}', unit='batch'):
+    for batch in tqdm(val_dataloader, desc=f'Epoch validation {epoch}, fold {fold}', unit='batch'):
         labels = batch[-1]
         data = batch[:-1]
         with no_grad():
@@ -403,14 +405,13 @@ def train(config_fpath: str,
     best_val_loss: float = 10e5
     best_val_accuracy: float = 0.
     best_val_weighted_f1_score: float = 0.
-    epoch: int = 1
-    while epoch < epochs + 1:
+    for epoch in range(epochs):
 
         folds: List[Tuple[Optional[Any], Optional[Any]]] = list(
             kfold.split(train_dataset)) if (kfold is not None) else [(None, None)]
 
-        for train_ids, test_ids in folds:
-
+        for fold, (train_ids, test_ids) in enumerate(folds):
+            
             # Determine whether to k-fold and if so how
             train_dataloader, val_dataloader = _create_training_dataloaders(
                 train_ids, test_ids, train_dataset, val_dataset, batch_size)
@@ -418,14 +419,11 @@ def train(config_fpath: str,
             # A.) train for 1 epoch
             model = model.to(DEVICE)
             model, step = _train_step(
-                model, train_dataloader, loss_fn, optimizer, epoch, step, logger)
+                model, train_dataloader, loss_fn, optimizer, epoch, fold, step, logger)
 
             # B.) validate
-            model = _val_step(model, val_dataloader, loss_fn, model_path, epoch, step,
+            model = _val_step(model, val_dataloader, loss_fn, model_path, epoch, fold, step,
                               best_val_loss, best_val_accuracy, best_val_weighted_f1_score, logger)
-
-            # Increment epoch, counting each fold as an epoch
-            epoch += 1
 
     # testing loop
     if test_dataset is not None:
