@@ -1,4 +1,6 @@
 import os
+from typing import Optional, Union
+
 import torch
 from torch.nn import Module
 from abc import abstractmethod
@@ -17,7 +19,7 @@ class BaseModel(Module):
         self,
         class_split: str = None,
         num_classes: int = None,
-        pretrained: bool = False
+        pretrained: Optional[Union[str, bool]] = False
     ) -> None:
         """
         Base model constructor.
@@ -27,8 +29,9 @@ class BaseModel(Module):
                                a 3-class split as: "benign+pathologicalbenign+udhVSadh+feaVSdcis+malignant".
                                Defaults to None.
             num_classes (int): Number of classes. Used if class split is not provided. Defaults to None.
-            pretrained (bool): If loading pretrained checkpoint. Currently all the pretrained were trained on the BRACS dataset.
-                               Defaults to False.
+            pretrained (str/bool): If path provided, load pretrained checkoing at this path. If empty string
+                                   or False, searches the model name against known BRACS models. If None,
+                                   not pretrained. Defaults to None.
         """
         super().__init__()
 
@@ -52,19 +55,24 @@ class BaseModel(Module):
         raise NotImplementedError('Implementation in subclasses.')
 
     def _load_checkpoint(self, model_name):
-        checkpoint_path = os.path.join(
-            os.path.dirname(__file__),
-            '..',
-            '..',
-            '..',
-            'checkpoints'
-        )
-        download_box_link(
-            url=MODEL_NAME_TO_URL[model_name],
-            out_fname=os.path.join(checkpoint_path, model_name)
-        )
+        if model_name in MODEL_NAME_TO_URL:
+            checkpoint_path = os.path.join(
+                os.path.dirname(__file__),
+                '..',
+                '..',
+                '..',
+                'checkpoints',
+                model_name
+            )
+            download_box_link(
+                url=MODEL_NAME_TO_URL[model_name],
+                out_fname=checkpoint_path
+            )
+        else:
+            checkpoint_path = model_name
+            
         self.load_state_dict(
-            torch.load(os.path.join(checkpoint_path, model_name))
+            torch.load(checkpoint_path)
         )
 
     @abstractmethod

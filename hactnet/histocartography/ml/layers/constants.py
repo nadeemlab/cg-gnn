@@ -30,7 +30,7 @@ AVAILABLE_LAYER_TYPES = {
 }
 
 
-GNN_MODULE = 'histocartography.ml.layers.{}'
+GNN_MODULE = 'hactnet.histocartography.ml.layers.{}'
 
 
 def min_nodes(graph, features):

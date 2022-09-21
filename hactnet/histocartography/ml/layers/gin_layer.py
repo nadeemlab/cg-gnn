@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from histocartography.ml.layers.constants import (
+from hactnet.histocartography.ml.layers.constants import (
     GNN_MSG, GNN_NODE_FEAT_IN, GNN_NODE_FEAT_OUT,
     GNN_AGG_MSG, REDUCE_TYPES
 )

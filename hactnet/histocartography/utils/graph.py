@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import networkx as nx
 import numpy as np
 import dgl
@@ -151,9 +153,4 @@ def to_device(x):
 
 
 def copy_graph(x):
-    graph_copy = dgl.DGLGraph(graph_data=x)
-    for k, v in x.ndata.items():
-        graph_copy.ndata[k] = v.clone()
-    for k, v in x.edata.items():
-        graph_copy.edata[k] = v.clone()
-    return graph_copy
+    return deepcopy(x)

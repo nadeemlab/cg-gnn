@@ -1,12 +1,9 @@
 """
-Query SPT PSQL database for cell-level features and slide-level labels and save to two CSV files.
-
-Note: use with the melanoma_psql conda env and not the hactnet_hpc env.
+Query SPT PSQL database for cell-level features and slide-level labels and save to two pickle files.
 """
 from os.path import exists
 from base64 import b64decode
 from mmap import mmap
-from argparse import ArgumentParser
 from typing import List, Union, Tuple
 
 from psycopg2 import connect
@@ -21,44 +18,9 @@ RESPONSE_TO_LABEL = {
 }
 
 
-def parse_arguments():
-    parser = ArgumentParser()
-    parser.add_argument(
-        '--output_name',
-        type=str,
-        help='What to call the resulting CSVs.',
-        required=True
-    )
-    parser.add_argument(
-        '--host',
-        type=str,
-        help='Host SQL server IP.',
-        required=True
-    )
-    parser.add_argument(
-        '--dbname',
-        type=str,
-        help='Database in SQL server to query.',
-        required=True
-    )
-    parser.add_argument(
-        '--user',
-        type=str,
-        help='Server login username.',
-        required=True
-    )
-    parser.add_argument(
-        '--password',
-        type=str,
-        help='Server login password.',
-        required=True
-    )
-    return parser.parse_args()
-
-
-def get_targets(conn) -> DataFrame:
+def get_targets(conn, measurement_study: str) -> DataFrame:
     "Get all target values for all cells."
-    df_targets = read_sql("""
+    df_targets = read_sql(f"""
         SELECT
             eq.histological_structure,
             eq.target,
@@ -76,7 +38,7 @@ def get_targets(conn) -> DataFrame:
             JOIN histology_assessment_process hap
                 ON sdmp.specimen=hap.slide
         WHERE
-            sdmp.study='Melanoma intralesional IL2 (Hollmann lab) - measurement' AND
+            sdmp.study='{measurement_study}' AND
             hap.result='Untreated'
         ORDER BY sdmp.specimen, eq.histological_structure, eq.target;
     """, conn)
@@ -86,9 +48,9 @@ def get_targets(conn) -> DataFrame:
     return df_targets
 
 
-def get_phenotypes(conn) -> DataFrame:
+def get_phenotypes(conn, analysis_study: str) -> DataFrame:
     "Get all phenotype signatures."
-    df_phenotypes = read_sql("""
+    df_phenotypes = read_sql(f"""
         SELECT
             cp.name,
             marker,
@@ -96,15 +58,15 @@ def get_phenotypes(conn) -> DataFrame:
         FROM cell_phenotype cp
             JOIN cell_phenotype_criterion cpc
                 ON cpc.cell_phenotype=cp.identifier
-        WHERE study='Melanoma intralesional IL2 (Hollmann lab) - data analysis';
+        WHERE study='{analysis_study}';
     """, conn)
     df_phenotypes['marker'] = df_phenotypes['marker'].astype(int)
     return df_phenotypes
 
 
-def get_shape_strings(conn) -> DataFrame:
+def get_shape_strings(conn, measurement_study: str) -> DataFrame:
     "Get the shapefile strings for each histological structure."
-    df_shapes = read_sql("""
+    df_shapes = read_sql(f"""
         SELECT  
             histological_structure,
             base64_contents AS shp_string
@@ -118,7 +80,7 @@ def get_shape_strings(conn) -> DataFrame:
             JOIN histology_assessment_process hap
                 ON sdmp.specimen=hap.slide
         WHERE
-            sdmp.study='Melanoma intralesional IL2 (Hollmann lab) - measurement' AND
+            sdmp.study='{measurement_study}' AND
             hap.result='Untreated'
         ORDER BY histological_structure;
     """, conn)
@@ -187,9 +149,9 @@ def create_feature_df(df_targets: DataFrame, df_phenotypes: DataFrame, df_shapes
     return df
 
 
-def create_label_df(conn) -> DataFrame:
+def create_label_df(conn, specimen_study: str) -> DataFrame:
     "Get slide-level results."
-    return read_sql("""
+    return read_sql(f"""
         SELECT 
             slide,
             d.result
@@ -200,19 +162,28 @@ def create_label_df(conn) -> DataFrame:
                 ON scp.source=d.subject
         WHERE
             hap.result='Untreated' AND
-            scp.study='Melanoma intralesional IL2 (Hollmann lab) - specimen collection';
+            scp.study='{specimen_study}';
     """, conn).set_index('slide').replace(RESPONSE_TO_LABEL)
 
 
-if __name__ == "__main__":
-    args = parse_arguments()
-    label_filename = args.output_name + '_labels.csv'
-    feature_filename = args.output_name + '_features.csv'
+def spt_to_file(analysis_study: str,
+                measurement_study: str,
+                specimen_study: str,
+                output_name: str,
+                host: str,
+                dbname: str,
+                user: str,
+                password: str
+                ) -> None:
+    "Query SPT PSQL database for cell-level features and slide-level labels and save to two files."
+    label_filename = output_name + '_labels.h5'
+    feature_filename = output_name + '_features.h5'
     if not (exists(label_filename) and exists(feature_filename)):
-        conn = connect(host=args.host, dbname=args.dbname,
-                       user=args.user, password=args.password)
-        create_label_df(conn).to_csv(label_filename)
-        create_feature_df(get_targets(conn),
-                          get_phenotypes(conn),
-                          get_centroids(get_shape_strings(conn))
-                          ).to_csv(feature_filename)
+        conn = connect(host=host, dbname=dbname,
+                       user=user, password=password)
+        create_label_df(conn, specimen_study).to_hdf(label_filename, 'labels')
+        create_feature_df(get_targets(conn, measurement_study),
+                          get_phenotypes(conn, analysis_study),
+                          get_centroids(get_shape_strings(
+                              conn, measurement_study))
+                          ).to_hdf(feature_filename, 'features')

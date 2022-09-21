@@ -3,7 +3,7 @@ import torch.nn as nn
 import importlib
 import dgl
 
-from histocartography.ml.layers.constants import (
+from hactnet.histocartography.ml.layers.constants import (
     AVAILABLE_LAYER_TYPES, GNN_MODULE,
     GNN_NODE_FEAT_OUT, READOUT_TYPES,
     REDUCE_TYPES

@@ -6,6 +6,7 @@
 *.bin
 *.csv
 *.txt
+*.npy
 
 # Models
 mlruns/

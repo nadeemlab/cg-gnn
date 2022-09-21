@@ -1,7 +1,6 @@
-"Queries the SPT server for cell-level data and slide-level labels and saves them to CSVs."
+"Generates graph from saved SPT files."
 from os import path, makedirs, listdir, replace
 from logging import info
-from argparse import ArgumentParser
 from pathlib import Path
 from random import shuffle, randint
 from warnings import warn
@@ -12,7 +11,7 @@ from numpy import ndarray, round, prod, percentile, argmin, nonzero
 from dgl import DGLGraph, graph
 from dgl.data.utils import load_graphs, save_graphs
 from sklearn.neighbors import kneighbors_graph
-from pandas import read_csv, DataFrame
+from pandas import read_hdf, DataFrame
 from scipy.spatial.distance import pdist, squareform
 
 LABEL = "label"
@@ -20,68 +19,18 @@ CENTROID = "centroid"
 FEATURES = "feat"
 
 
-def parse_arguments():
-    "Process command line arguments."
-    parser = ArgumentParser()
-    parser.add_argument(
-        '--spt_csv_feat_filename',
-        type=str,
-        help='Path to the SPT features CSV.',
-        required=True
-    )
-    parser.add_argument(
-        '--spt_csv_label_filename',
-        type=str,
-        help='Path to the SPT labels CSV.',
-        required=True
-    )
-    parser.add_argument(
-        '--save_path',
-        type=str,
-        help='Path to save the cell graphs.',
-        default='/data/',
-        required=False
-    )
-    parser.add_argument(
-        '--val_data_prc',
-        type=int,
-        help='Percentage of data to use as validation data. Set to 0 if you want to do k-fold '
-        'cross-validation later. (Training percentage is implicit.) Default 15%.',
-        default=15,
-        required=False
-    )
-    parser.add_argument(
-        '--test_data_prc',
-        type=int,
-        help='Percentage of data to use as the test set. (Training percentage is implicit.) '
-        'Default 15%.',
-        default=15,
-        required=False
-    )
-    parser.add_argument(
-        '--roi_side_length',
-        type=int,
-        help='Side length in pixels of the ROI areas we wish to generate.',
-        default=600,
-        required=False
-    )
-    return parser.parse_args()
-
-
-def create_graphs_from_spt_csv(spt_csv_feat_filename: str,
-                               spt_csv_label_filename: str,
-                               output_directory: str,
-                               image_size: Tuple[int, int],
-                               k: int = 5,
-                               thresh: Optional[int] = None
-                               ) -> Dict[int, List[List[str]]]:
-    "Create graphs from a feature, location, and label CSV created from SPT."
+def create_graphs_from_spt_file(spt_hdf_feat_filename: str,
+                                spt_hdf_label_filename: str,
+                                output_directory: str,
+                                image_size: Tuple[int, int],
+                                k: int = 5,
+                                thresh: Optional[int] = None
+                                ) -> Dict[int, List[List[str]]]:
+    "Create graphs from feature and label files created from SPT."
 
     # Read in the SPT data and convert the labels from categorical to numeric
-    df_feat_all_specimens: DataFrame = read_csv(
-        spt_csv_feat_filename, index_col=0)
-    df_label_all_specimens: DataFrame = read_csv(
-        spt_csv_label_filename, index_col=0)
+    df_feat_all_specimens: DataFrame = read_hdf(spt_hdf_feat_filename)
+    df_label_all_specimens: DataFrame = read_hdf(spt_hdf_label_filename)
 
     # Split the data by specimen (slide)
     filenames: Dict[str, List[str]] = {}
@@ -308,25 +257,30 @@ def split_rois(graphs_by_specimen_and_label: Dict[int, List[List[str]]],
     return train_files, val_files, test_files
 
 
-if __name__ == "__main__":
+def generate_graphs(spt_hdf_feat_filename: str,
+                    spt_hdf_label_filename: str,
+                    save_path: str,
+                    val_data_prc: int,
+                    test_data_prc: int,
+                    roi_side_length: int):
+    "Query the SPT server for cell-level data and slide-level labels and saves them to file."
 
     # Handle inputs
-    args = parse_arguments()
-    if not (path.exists(args.spt_csv_feat_filename) and path.exists(args.spt_csv_label_filename)):
-        raise ValueError("SPT CSVs to read from do not exist.")
-    if not 0 <= args.val_data_prc < 100:
+    if not (path.exists(spt_hdf_feat_filename) and path.exists(spt_hdf_label_filename)):
+        raise ValueError("SPT files to read from do not exist.")
+    if not 0 <= val_data_prc < 100:
         raise ValueError(
             "Validation set percentage must be between 0 and 100.")
-    if not 0 <= args.test_data_prc < 100:
+    if not 0 <= test_data_prc < 100:
         raise ValueError(
             "Test set percentage must be between 0 and 100.")
-    if not 0 <= args.val_data_prc + args.test_data_prc < 100:
+    if not 0 <= val_data_prc + test_data_prc < 100:
         raise ValueError(
             "Remaining data set percentage for training use must be between 0 and 50.")
-    val_prop: float = args.val_data_prc/100
-    test_prop: float = args.test_data_prc/100
-    roi_size: Tuple[int, int] = (args.roi_side_length, args.roi_side_length)
-    save_path = path.join(args.save_path)
+    val_prop: float = val_data_prc/100
+    test_prop: float = test_data_prc/100
+    roi_size: Tuple[int, int] = (roi_side_length, roi_side_length)
+    save_path = path.join(save_path)
 
     # Create save directory if it doesn't exist yet
     makedirs(save_path, exist_ok=True)
@@ -350,8 +304,8 @@ if __name__ == "__main__":
         set_directories.append(directory)
 
     # Create the graphs
-    graphs_by_specimen_and_label = create_graphs_from_spt_csv(
-        args.spt_csv_feat_filename, args.spt_csv_label_filename, save_path, image_size=roi_size)
+    graphs_by_specimen_and_label = create_graphs_from_spt_file(
+        spt_hdf_feat_filename, spt_hdf_label_filename, save_path, image_size=roi_size)
 
     # Move the train, val, and test sets into their own dedicated folders
     sets_data = split_rois(graphs_by_specimen_and_label, val_prop, test_prop)

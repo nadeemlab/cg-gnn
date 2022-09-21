@@ -48,12 +48,15 @@ class CellGraphModel(BaseModel):
 
         # 4- load pretrained weights if needed
         if self.pretrained:
-            model_name = self._get_checkpoint_id()
-            if model_name:
-                self._load_checkpoint(model_name)
+            if isinstance(self.pretrained, str) and (self.pretrained != ''):
+                self._load_checkpoint(self.pretrained)
             else:
-                raise NotImplementedError(
-                    'There is no available CG-GNN checkpoint for the provided params.')
+                model_name = self._get_checkpoint_id()
+                if model_name:
+                    self._load_checkpoint(model_name)
+                else:
+                    raise NotImplementedError(
+                        'There is no available CG-GNN checkpoint for the provided params.')
 
     def _get_checkpoint_id(self):
 
