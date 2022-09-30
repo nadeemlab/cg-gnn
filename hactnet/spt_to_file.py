@@ -4,10 +4,10 @@ Query SPT PSQL database for cell-level features and slide-level labels and save 
 from os.path import exists
 from base64 import b64decode
 from mmap import mmap
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Optional
 
 from psycopg2 import connect
-from pandas import DataFrame, Series, read_sql
+from pandas import DataFrame, Series, read_sql, read_hdf
 from shapefile import Reader
 
 
@@ -18,7 +18,7 @@ RESPONSE_TO_LABEL = {
 }
 
 
-def get_targets(conn, measurement_study: str) -> DataFrame:
+def _get_targets(conn, measurement_study: str) -> DataFrame:
     "Get all target values for all cells."
     df_targets = read_sql(f"""
         SELECT
@@ -48,7 +48,7 @@ def get_targets(conn, measurement_study: str) -> DataFrame:
     return df_targets
 
 
-def get_phenotypes(conn, analysis_study: str) -> DataFrame:
+def _get_phenotypes(conn, analysis_study: str) -> DataFrame:
     "Get all phenotype signatures."
     df_phenotypes = read_sql(f"""
         SELECT
@@ -64,7 +64,7 @@ def get_phenotypes(conn, analysis_study: str) -> DataFrame:
     return df_phenotypes
 
 
-def get_shape_strings(conn, measurement_study: str) -> DataFrame:
+def _get_shape_strings(conn, measurement_study: str) -> DataFrame:
     "Get the shapefile strings for each histological structure."
     df_shapes = read_sql(f"""
         SELECT  
@@ -89,7 +89,7 @@ def get_shape_strings(conn, measurement_study: str) -> DataFrame:
     return df_shapes
 
 
-def extract_points(row: Series) -> Tuple[float, float]:
+def _extract_points(row: Series) -> Tuple[float, float]:
     "Convert shapefile string to center coordinate."
     shapefile_base64_ascii: str = row['shp_string']
     bytes_original = b64decode(shapefile_base64_ascii.encode('utf-8'))
@@ -111,16 +111,16 @@ def extract_points(row: Series) -> Tuple[float, float]:
     return row
 
 
-def get_centroids(df: DataFrame) -> DataFrame:
+def _get_centroids(df: DataFrame) -> DataFrame:
     "Get the centroids from a dataframe with histological structure and shapefile strings."
     df = df.copy()
-    df = df.apply(extract_points, axis=1)
+    df = df.apply(_extract_points, axis=1)
     df.drop('shp_string', axis=1, inplace=True)
     df.set_index('histological_structure', inplace=True)
     return df
 
 
-def create_feature_df(df_targets: DataFrame, df_phenotypes: DataFrame, df_shapes: DataFrame) -> DataFrame:
+def _create_feature_df(df_targets: DataFrame, df_phenotypes: DataFrame, df_shapes: DataFrame) -> DataFrame:
     "Create phenotype features and structure centers and merge with feature DataFrame."
 
     # Reorganize targets data so that the indices is the histological structure
@@ -149,7 +149,7 @@ def create_feature_df(df_targets: DataFrame, df_phenotypes: DataFrame, df_shapes
     return df
 
 
-def create_label_df(conn, specimen_study: str) -> DataFrame:
+def _create_label_df(conn, specimen_study: str) -> DataFrame:
     "Get slide-level results."
     return read_sql(f"""
         SELECT 
@@ -166,24 +166,29 @@ def create_label_df(conn, specimen_study: str) -> DataFrame:
     """, conn).set_index('slide').replace(RESPONSE_TO_LABEL)
 
 
-def spt_to_file(analysis_study: str,
-                measurement_study: str,
-                specimen_study: str,
-                output_name: str,
-                host: str,
-                dbname: str,
-                user: str,
-                password: str
-                ) -> None:
-    "Query SPT PSQL database for cell-level features and slide-level labels and save to two files."
-    label_filename = output_name + '_labels.h5'
-    feature_filename = output_name + '_features.h5'
-    if not (exists(label_filename) and exists(feature_filename)):
-        conn = connect(host=host, dbname=dbname,
-                       user=user, password=password)
-        create_label_df(conn, specimen_study).to_hdf(label_filename, 'labels')
-        create_feature_df(get_targets(conn, measurement_study),
-                          get_phenotypes(conn, analysis_study),
-                          get_centroids(get_shape_strings(
-                              conn, measurement_study))
-                          ).to_hdf(feature_filename, 'features')
+def spt_to_dataframes(analysis_study: str,
+                      measurement_study: str,
+                      specimen_study: str,
+                      host: str,
+                      dbname: str,
+                      user: str,
+                      password: str,
+                      output_name: Optional[str] = None
+                      ) -> Tuple[DataFrame, DataFrame]:
+    "Query SPT PSQL database for cell-level features and slide-level labels and return."
+    if output_name is not None:
+        label_filename = output_name + '_labels.h5'
+        feature_filename = output_name + '_features.h5'
+        if exists(label_filename) and exists(feature_filename):
+            return read_hdf(feature_filename), read_hdf(label_filename)
+    conn = connect(host=host, dbname=dbname,
+                   user=user, password=password)
+    df_label = _create_label_df(conn, specimen_study)
+    df_feat = _create_feature_df(_get_targets(conn, measurement_study),
+                                 _get_phenotypes(conn, analysis_study),
+                                 _get_centroids(_get_shape_strings(
+                                     conn, measurement_study)))
+    if output_name is not None:
+        df_label.to_hdf(label_filename, 'labels')
+        df_feat.to_hdf(feature_filename, 'features')
+    return df_feat, df_label

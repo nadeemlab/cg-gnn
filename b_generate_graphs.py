@@ -1,6 +1,8 @@
 "Generates graph from saved SPT files."
 from argparse import ArgumentParser
 
+from pandas import read_hdf
+
 from hactnet.generate_graph_from_spt import generate_graphs
 
 
@@ -54,5 +56,5 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    generate_graphs(args.spt_hdf_feat_filename, args.spt_hdf_label_filename,
-                    args.save_path, args.val_data_prc, args.test_data_prc, args.roi_side_length)
+    generate_graphs(read_hdf(args.spt_hdf_feat_filename), read_hdf(args.spt_hdf_label_filename),
+                    args.val_data_prc, args.test_data_prc, args.roi_side_length, args.save_path)

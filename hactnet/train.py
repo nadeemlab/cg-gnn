@@ -19,6 +19,7 @@ from torch.nn import CrossEntropyLoss
 from torch.utils.data import ConcatDataset, DataLoader, SubsetRandomSampler
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, f1_score, classification_report
+from dgl import DGLGraph
 from tqdm import tqdm
 
 from hactnet.histocartography.ml import CellGraphModel, TissueGraphModel, HACTModel
@@ -31,7 +32,8 @@ IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
 
 
-def _model_name_and_path(model_name: Optional[str], model_path: str) -> Tuple[str, str]:
+def _model_name_and_path(model_name: Optional[str], model_path: str
+                         ) -> Tuple[str, Optional[str]]:
     "Generate model name if necessary and set path to save checkpoints."
     model_name = str(uuid4()) if (
         model_name is None) else model_name
@@ -45,43 +47,42 @@ def _model_name_and_path(model_name: Optional[str], model_path: str) -> Tuple[st
     return model_name, model_path
 
 
-def _create_dataset(category: str,
-                    cg_path: Optional[str],
-                    tg_path: Optional[str],
-                    assign_mat_path: Optional[str],
-                    in_ram: bool
-                    ) -> Optional[CGTGDataset]:
+def _create_dataset(
+    category: str,
+    cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
+    tissue_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
+    assign_mat_path: Optional[str] = None,
+    in_ram: bool = True
+) -> Optional[CGTGDataset]:
     "Make a cell and/or tissue graph dataset."
 
-    val_cg_path = join(cg_path, category) if cg_path is not None else None
-    val_tg_path = join(tg_path, category) if tg_path is not None else None
     return CGTGDataset(
-        cg_path=val_cg_path,
-        tg_path=val_tg_path,
+        cell_graphs,
+        tissue_graphs,
         assign_mat_path=join(
             assign_mat_path, category) if assign_mat_path is not None else None,
         load_in_ram=in_ram
     ) if (
-        (val_cg_path is not None) and exists(val_cg_path) or
-        (val_tg_path is not None) and exists(val_tg_path)
+        (cell_graphs is not None) or (tissue_graphs is not None)
     ) else None
 
 
-def _create_datasets(cg_path: Optional[str],
-                     tg_path: Optional[str],
-                     assign_mat_path: Optional[str],
-                     in_ram: bool,
-                     k: int
-                     ) -> Tuple[CGTGDataset, Optional[CGTGDataset], Optional[CGTGDataset], Optional[KFold]]:
+def _create_datasets(
+    cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
+    tissue_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
+    assign_mat_path: Optional[str] = None,
+    in_ram: bool = None,
+    k: int = 3
+) -> Tuple[CGTGDataset, Optional[CGTGDataset], Optional[CGTGDataset], Optional[KFold]]:
     "Make the cell and/or tissue graph datasets and the k-fold if necessary."
 
     train_dataset = _create_dataset(
-        'train', cg_path, tg_path, assign_mat_path, in_ram)
+        'train', cell_graphs, tissue_graphs, assign_mat_path)
     assert train_dataset is not None
     val_dataset = _create_dataset(
-        'val', cg_path, tg_path, assign_mat_path, in_ram)
+        'val', cell_graphs, tissue_graphs, assign_mat_path)
     test_dataset = _create_dataset(
-        'test', cg_path, tg_path, assign_mat_path, in_ram)
+        'test', cell_graphs, tissue_graphs, assign_mat_path)
 
     if (k > 0) and (val_dataset is not None):
         # stack train and validation dataloaders if both exist and k-fold cross val is activated
@@ -274,7 +275,8 @@ def _test_model(model: BaseModel,
                 loss_fn: Callable,
                 model_path: str,
                 step: int,
-                logger: Optional[str] = None):
+                logger: Optional[str] = None
+                ) -> BaseModel:
     model.eval()
     test_dataloader = DataLoader(
         test_dataset,
@@ -283,13 +285,17 @@ def _test_model(model: BaseModel,
         collate_fn=collate
     )
 
+    max_acc = -1.
+    max_acc_model_checkpoint = {}
+
     for metric in ['best_val_loss', 'best_val_accuracy', 'best_val_weighted_f1_score']:
 
         print(f'\n*** Start testing w/ {metric} model ***')
 
         model_name = [f for f in listdir(
             model_path) if f.endswith(".pt") and metric in f][0]
-        model.load_state_dict(load(join(model_path, model_name)))
+        checkpoint = load(join(model_path, model_name))
+        model.load_state_dict(checkpoint)
 
         all_test_logits = []
         all_test_labels = []
@@ -318,6 +324,9 @@ def _test_model(model: BaseModel,
         if logger == 'mlflow':
             log_metric('best_test_accuracy_' +
                        metric, accuracy, step=step)
+        if accuracy > max_acc:
+            max_acc = accuracy
+            max_acc_model_checkpoint = checkpoint
 
         # compute & store weighted f1-score
         weighted_f1_score = f1_score(
@@ -345,24 +354,24 @@ def _test_model(model: BaseModel,
         print(f'Test weighted F1 score {weighted_f1_score}')
         print(f'Test accuracy {accuracy}')
 
+    model.load_state_dict(max_acc_model_checkpoint)
+    return model
+
 
 def train(config_fpath: str,
           model_path: str,
-          cg_path: Optional[str],
-          tg_path: Optional[str],
-          assign_mat_path: Optional[str],
+          cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
+          tissue_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
+          assign_mat_path: Optional[str] = None,
           model_name: Optional[str] = None,
           logger: Optional[str] = None,
           in_ram: bool = True,
           epochs: int = 10,
           learning_rate: float = 10e-3,
           batch_size: int = 1,
-          k: int = 0):
-    """
-    Train HACTNet, CG-GNN, or TG-GNN.
-    Args:
-        args (Namespace): parsed arguments.
-    """
+          k: int = 0
+          ) -> BaseModel:
+    "Train HACTNet, CG-GNN, or TG-GNN."
 
     # load config file
     with open(config_fpath, 'r', encoding='utf-8') as f:
@@ -387,7 +396,7 @@ def train(config_fpath: str,
 
     # make datasets (train, validation & test)
     train_dataset, val_dataset, test_dataset, kfold = _create_datasets(
-        cg_path, tg_path, assign_mat_path, in_ram, k)
+        cell_graphs, tissue_graphs, assign_mat_path, in_ram, k)
 
     # declare model
     model = _create_model(config, config_fpath)
@@ -411,7 +420,7 @@ def train(config_fpath: str,
             kfold.split(train_dataset)) if (kfold is not None) else [(None, None)]
 
         for fold, (train_ids, test_ids) in enumerate(folds):
-            
+
             # Determine whether to k-fold and if so how
             train_dataloader, val_dataloader = _create_training_dataloaders(
                 train_ids, test_ids, train_dataset, val_dataset, batch_size)
@@ -427,18 +436,20 @@ def train(config_fpath: str,
 
     # testing loop
     if test_dataset is not None:
-        _test_model(model, test_dataset, batch_size,
-                    loss_fn, model_path, step, logger)
+        model = _test_model(model, test_dataset, batch_size,
+                            loss_fn, model_path, step, logger)
 
     if logger == 'mlflow':
         rmtree(model_path)
 
+    return model
+
 
 def infer(config_fpath: str,
           model_path: str,
-          cg_path: Optional[str],
-          tg_path: Optional[str],
-          assign_mat_path: Optional[str],
+          cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
+          tissue_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
+          assign_mat_path: Optional[str] = None,
           in_ram: bool = True,
           batch_size: int = 1,
           pretrained: bool = True):
@@ -458,7 +469,7 @@ def infer(config_fpath: str,
 
     # make test data loader
     dataset = _create_dataset(
-        'train', cg_path, tg_path, assign_mat_path, in_ram)
+        'train', cell_graphs, tissue_graphs, assign_mat_path, in_ram)
     assert dataset is not None
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate)
 

@@ -6,6 +6,7 @@ Script for testing CG-GNN, TG-GNN and HACT models
 from argparse import ArgumentParser
 
 from hactnet.train import infer
+from hactnet.util import load_cgtg_graphs
 
 
 def parse_arguments():
@@ -70,5 +71,11 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    infer(args.config_fpath, args.model_path, args.cg_path, args.tg_path,
-          args.assign_mat_path, args.in_ram, args.batch_size, args.pretrained)
+    infer(args.config_fpath,
+          args.model_path,
+          load_cgtg_graphs(args.cg_path) if args.cg_path is not None else None,
+          load_cgtg_graphs(args.tg_path) if args.tg_path is not None else None,
+          args.assign_mat_path,
+          args.in_ram,
+          args.batch_size,
+          args.pretrained)

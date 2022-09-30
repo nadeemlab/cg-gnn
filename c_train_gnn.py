@@ -5,6 +5,7 @@ Script for training CG-GNN, TG-GNN and HACT models
 from argparse import ArgumentParser
 
 from hactnet.train import train
+from hactnet.util import load_cgtg_graphs
 
 
 def parse_arguments():
@@ -105,6 +106,15 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    train(args.config_fpath, args.model_path, args.cg_path, args.tg_path, args.assign_mat_path,
-          args.model_name, args.logger, args.in_ram, args.epochs, args.learning_rate,
-          args.batch_size, args.k)
+    train(args.config_fpath,
+          args.model_path,
+          load_cgtg_graphs(args.cg_path) if args.cg_path is not None else None,
+          load_cgtg_graphs(args.tg_path) if args.tg_path is not None else None,
+          args.assign_mat_path,
+          args.model_name,
+          args.logger,
+          args.in_ram,
+          args.epochs,
+          args.learning_rate,
+          args.batch_size,
+          args.k)
