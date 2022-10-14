@@ -1,10 +1,10 @@
 """
-Query SPT PSQL database for cell-level features and slide-level labels and save to two pickle files.
+Query SPT PSQL database for cell-level attributes and slide-level labels and save to two pickle files.
 """
 from os.path import exists
 from base64 import b64decode
 from mmap import mmap
-from typing import List, Union, Tuple, Optional
+from typing import List, Union, Tuple, Optional, Dict
 
 from psycopg2 import connect
 from pandas import DataFrame, Series, read_sql, read_hdf
@@ -46,6 +46,20 @@ def _get_targets(conn, measurement_study: str) -> DataFrame:
         int)
     df_targets['target'] = df_targets['target'].astype(int)
     return df_targets
+
+
+def _get_target_names(conn) -> Dict[int, str]:
+    "Get names of each chemical species."
+    s_target_names = read_sql("""
+        SELECT
+            identifier,
+            symbol
+        FROM chemical_species;
+    """, conn).set_index('identifier')['symbol']
+    renames: Dict[int, str] = {}
+    for identifier, symbol in s_target_names.items():
+        renames[int(identifier)] = 'FT_' + symbol
+    return renames
 
 
 def _get_phenotypes(conn, analysis_study: str) -> DataFrame:
@@ -120,11 +134,14 @@ def _get_centroids(df: DataFrame) -> DataFrame:
     return df
 
 
-def _create_feature_df(df_targets: DataFrame, df_phenotypes: DataFrame, df_shapes: DataFrame) -> DataFrame:
-    "Create phenotype features and structure centers and merge with feature DataFrame."
+def _create_cell_df(df_targets: DataFrame,
+                    target_names: Dict[int, str],
+                    df_phenotypes: DataFrame,
+                    df_shapes: DataFrame) -> DataFrame:
+    "Find chemical species, phenotypes, and locations and merge into a DataFrame."
 
     # Reorganize targets data so that the indices is the histological structure
-    # and the columns are the target values / features
+    # and the columns are the target values / chemical species
     columns: List[Union[int, str]] = list(range(df_targets['target'].min(),
                                                 df_targets['target'].max()+1)) \
         + ['specimen']
@@ -137,11 +154,15 @@ def _create_feature_df(df_targets: DataFrame, df_phenotypes: DataFrame, df_shape
         data['specimen'] = df_hs['specimen'].iloc[0]
         df.loc[hs, ] = Series(data)
 
-    # Check if each cell matches each phenotype signature and add as features
+    # Check if each cell matches each phenotype signature and add
     for phenotype, df_p in df_phenotypes.groupby('name'):
         criteria = df_p[['marker', 'coded_value']
                         ].set_index('marker').T.iloc[0]
-        df[phenotype] = (df.loc[:, criteria.index] == criteria).all(axis=1)
+        df['PH_' + phenotype] = (df.loc[:, criteria.index]
+                                 == criteria).all(axis=1)
+
+    # Rename columns from target int indices to their text names
+    df.rename(target_names, axis=1, inplace=True)
 
     # Merge in the shapes
     df = df.join(df_shapes, on='histological_structure')
@@ -175,20 +196,20 @@ def spt_to_dataframes(analysis_study: str,
                       password: str,
                       output_name: Optional[str] = None
                       ) -> Tuple[DataFrame, DataFrame]:
-    "Query SPT PSQL database for cell-level features and slide-level labels and return."
+    "Query SPT PSQL database for cell-level attributes and slide-level labels and return."
     if output_name is not None:
         label_filename = output_name + '_labels.h5'
-        feature_filename = output_name + '_features.h5'
-        if exists(label_filename) and exists(feature_filename):
-            return read_hdf(feature_filename), read_hdf(label_filename)
+        cells_filename = output_name + '_cells.h5'
+        if exists(label_filename) and exists(cells_filename):
+            return read_hdf(cells_filename), read_hdf(label_filename)
     conn = connect(host=host, dbname=dbname,
                    user=user, password=password)
     df_label = _create_label_df(conn, specimen_study)
-    df_feat = _create_feature_df(_get_targets(conn, measurement_study),
-                                 _get_phenotypes(conn, analysis_study),
-                                 _get_centroids(_get_shape_strings(
-                                     conn, measurement_study)))
+    df_cells = _create_cell_df(_get_targets(conn, measurement_study),
+                               _get_target_names(conn),
+                               _get_phenotypes(conn, analysis_study),
+                               _get_centroids(_get_shape_strings(conn, measurement_study)))
     if output_name is not None:
         df_label.to_hdf(label_filename, 'labels')
-        df_feat.to_hdf(feature_filename, 'features')
-    return df_feat, df_label
+        df_cells.to_hdf(cells_filename, 'cells')
+    return df_cells, df_label
