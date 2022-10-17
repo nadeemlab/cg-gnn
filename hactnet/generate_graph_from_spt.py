@@ -4,7 +4,7 @@ from random import shuffle, randint
 from warnings import warn
 from typing import Optional, Tuple, List, Dict, DefaultDict
 
-from torch import Tensor, FloatTensor, IntTensor, is_tensor
+from torch import Tensor, FloatTensor, IntTensor
 from numpy import ndarray, round, prod, percentile, argmin, nonzero
 from dgl import DGLGraph, graph
 from dgl.data.utils import save_graphs
@@ -15,27 +15,29 @@ from scipy.spatial.distance import pdist, squareform
 LABEL = "label"
 CENTROID = "centroid"
 FEATURES = "feat"
+INDICES = "histological_structure"
+PHENOTYPES = "phenotypes"
 
 
-def _create_graphs_from_spt_file(df_feat_all_specimens: DataFrame,
+def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
                                  df_label_all_specimens: DataFrame,
                                  image_size: Tuple[int, int],
                                  k: int = 5,
                                  thresh: Optional[int] = None
                                  ) -> Tuple[Dict[int, Dict[str, List[DGLGraph]]],
                                             Dict[DGLGraph, str]]:
-    "Create graphs from feature and label files created from SPT."
+    "Create graphs from cell and label files created from SPT."
 
     # Split the data by specimen (slide)
     graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
     roi_names: Dict[DGLGraph, str] = {}
-    for specimen, df_specimen in df_feat_all_specimens.groupby('specimen'):
+    for specimen, df_specimen in df_cell_all_specimens.groupby('specimen'):
 
         # Initialize data structures
         bboxes: List[Tuple[int, int, int, int, int, int]] = []
         slide_size = df_specimen[['center_x', 'center_y']].max() + 100
-        p_tumor = df_specimen['Tumor'].sum()/df_specimen.shape[0]
-        df_tumor = df_specimen.loc[df_specimen['Tumor'], :]
+        p_tumor = df_specimen['PH_Tumor'].sum()/df_specimen.shape[0]
+        df_tumor = df_specimen.loc[df_specimen['PH_Tumor'], :]
         d_square = squareform(pdist(df_tumor[['center_x', 'center_y']]))
 
         # Create as many ROIs as images will add up to the proportion of
@@ -58,17 +60,21 @@ def _create_graphs_from_spt_file(df_feat_all_specimens: DataFrame,
             d_square = d_square[cells_to_keep, :][:, cells_to_keep]
 
         # Create feature, centroid, and label arrays and then the graph
-        df_features = df_specimen.drop(
-            ['center_x', 'center_y', 'specimen'], axis=1)
+        df_features = df_specimen.loc[:,
+                                      df_specimen.columns.str.startswith('FT_')]
+        df_phenotypes = df_specimen.loc[:,
+                                        df_specimen.columns.str.startswith('PH_')]
         for i, (x_min, x_max, y_min, y_max, x, y) in enumerate(bboxes):
             df_roi: DataFrame = df_specimen.loc[df_specimen['center_x'].between(
                 x_min, x_max) & df_specimen['center_y'].between(y_min, y_max), ]
             centroids = df_roi[['center_x', 'center_y']].values
             features = df_features.loc[df_roi.index, ].astype(int).values
+            phenotypes = df_phenotypes.loc[df_roi.index, ].astype(int).values
             graph_instance = _create_graph(
-                centroids, features, df_roi.index.to_numpy(), k=k, thresh=thresh)
+                df_roi.index.to_numpy(), centroids, features, phenotypes, k=k, thresh=thresh)
             graphs_by_specimen[specimen].append(graph_instance)
-            roi_names[graph_instance] = f'melanoma_{specimen}_{i}_{image_size[0]}x{image_size[1]}_x{x}_y{y}'
+            roi_names[graph_instance] = \
+                f'melanoma_{specimen}_{i}_{image_size[0]}x{image_size[1]}_x{x}_y{y}'
 
     # Split the graphs by specimen and label
     graphs_by_label_and_specimen: Dict[int,
@@ -79,19 +85,19 @@ def _create_graphs_from_spt_file(df_feat_all_specimens: DataFrame,
     return graphs_by_label_and_specimen, roi_names
 
 
-def _create_graph(centroids: ndarray,
+def _create_graph(node_indices: ndarray,
+                  centroids: ndarray,
                   features: ndarray,
-                  labels: Optional[ndarray] = None,
-                  node_indices: Optional[ndarray] = None,
+                  phenotypes: ndarray,
                   k: int = 5,
                   thresh: Optional[int] = None
                   ) -> DGLGraph:
     """Generate the graph topology from the provided instance_map using (thresholded) kNN
     Args:
+        node_indices (array): Indices for each node.
         centroids (array): Node centroids
         features (array): Features of each node. Shape (nr_nodes, nr_features)
-        labels (array): Node levels.
-        node_indices (array): Indices for each node.
+        phenotypes (array): A set of alternative features for each node based on phenotypes.
         k (int, optional): Number of neighbors. Defaults to 5.
         thresh (int, optional): Maximum allowed distance between 2 nodes.
                                     Defaults to None (no thresholding).
@@ -103,24 +109,11 @@ def _create_graph(centroids: ndarray,
     num_nodes = features.shape[0]
     graph_instance = graph([])
     graph_instance.add_nodes(num_nodes)
+    graph_instance.ndata[INDICES] = IntTensor(node_indices)
     graph_instance.ndata[CENTROID] = FloatTensor(centroids)
-
-    # add node features
-    if not is_tensor(features):
-        features = FloatTensor(features)
-    graph_instance.ndata[FEATURES] = Tensor(features)
-
-    # add node indices
-    if node_indices is not None:
-        graph_instance.ndata['node_indices'] = IntTensor(node_indices)
-
-    # add node labels/features
-    if labels is not None:
-        assert labels.shape[0] == centroids.shape[0], \
-            "Number of labels do not match number of nodes"
-        graph_instance.ndata[LABEL] = FloatTensor(labels.astype(float))
-        graph_instance.ndata[LABEL] = FloatTensor(labels.astype(float))
-        graph_instance.ndata[LABEL] = FloatTensor(labels.astype(float))
+    graph_instance.ndata[FEATURES] = FloatTensor(features)
+    graph_instance.ndata[PHENOTYPES] = FloatTensor(phenotypes)
+    # Note: features and phenotypes are binary variables, but DGL only supports FloatTensors
 
     # build kNN adjacency
     adj = kneighbors_graph(
