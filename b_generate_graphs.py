@@ -10,9 +10,9 @@ def parse_arguments():
     "Process command line arguments."
     parser = ArgumentParser()
     parser.add_argument(
-        '--spt_hdf_feat_filename',
+        '--spt_hdf_cell_filename',
         type=str,
-        help='Path to the SPT features HDF.',
+        help='Path to the SPT cell attributes HDF.',
         required=True
     )
     parser.add_argument(
@@ -56,5 +56,5 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    generate_graphs(read_hdf(args.spt_hdf_feat_filename), read_hdf(args.spt_hdf_label_filename),
+    generate_graphs(read_hdf(args.spt_hdf_cell_filename), read_hdf(args.spt_hdf_label_filename),
                     args.val_data_prc, args.test_data_prc, args.roi_side_length, args.save_path)
