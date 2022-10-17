@@ -20,9 +20,7 @@ from sklearn.metrics import accuracy_score, f1_score, classification_report
 from dgl import DGLGraph
 from tqdm import tqdm
 
-from hactnet.histocartography.ml import CellGraphModel
-
-from hactnet.util import CGDataset, collate
+from hactnet.util import CellGraphModel, CGDataset, collate
 
 # cuda support
 IS_CUDA = is_available()
