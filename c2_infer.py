@@ -6,7 +6,7 @@ Script for testing CG-GNN, TG-GNN and HACT models
 from argparse import ArgumentParser
 
 from hactnet.train import infer
-from hactnet.util import load_cgtg_graphs
+from hactnet.util import load_cell_graphs
 
 
 def parse_arguments():
@@ -20,29 +20,7 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
-        '--tg_path',
-        type=str,
-        help='path to tissue graphs.',
-        default=None,
-        required=False
-    )
-    parser.add_argument(
-        '--assign_mat_path',
-        type=str,
-        help='path to the assignment matrices.',
-        default=None,
-        required=False
-    )
-    parser.add_argument(
-        '-conf',
-        '--config_fpath',
-        type=str,
-        help='path to the config file.',
-        default='',
-        required=False
-    )
-    parser.add_argument(
-        '--model_path',
+        '--model_checkpoint_path',
         type=str,
         help='path to model to test.',
         default=None,
@@ -71,11 +49,7 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    infer(args.config_fpath,
-          args.model_path,
-          load_cgtg_graphs(args.cg_path) if args.cg_path is not None else None,
-          load_cgtg_graphs(args.tg_path) if args.tg_path is not None else None,
-          args.assign_mat_path,
+    infer(load_cell_graphs(args.cg_path),
+          args.model_checkpoint_path,
           args.in_ram,
-          args.batch_size,
-          args.pretrained)
+          args.batch_size)

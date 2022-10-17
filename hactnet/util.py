@@ -1,13 +1,11 @@
 """Cell/tissue graph dataset utility functions."""
 from os.path import join
 from glob import glob
-from typing import Tuple, List, Optional
+from typing import Tuple, List
 
-from h5py import File
-from torch import LongTensor, IntTensor, from_numpy
+from torch import LongTensor, IntTensor
 from torch.cuda import is_available
 from torch.utils.data import Dataset
-from numpy import array
 from dgl import batch, DGLGraph
 from dgl.data.utils import load_graphs
 
@@ -24,14 +22,8 @@ COLLATE_FN = {
 }
 
 
-def h5_to_tensor(h5_path):
-    h5_object = File(h5_path, 'r')
-    out = from_numpy(array(h5_object['assignment_matrix']))
-    return out
-
-
-def load_cgtg_graphs(graph_path: str) -> Tuple[List[DGLGraph], List[int]]:
-    "Load cell or tissue graphs."
+def load_cell_graphs(graph_path: str) -> Tuple[List[DGLGraph], List[int]]:
+    "Load cell graphs."
     cg_fnames = glob(join(graph_path, '*.bin'))
     cg_fnames.sort()
     graph_packets = [load_graphs(join(
@@ -41,59 +33,28 @@ def load_cgtg_graphs(graph_path: str) -> Tuple[List[DGLGraph], List[int]]:
     return graphs, graph_labels
 
 
-class CGTGDataset(Dataset):
-    """Cell/tissue graph dataset."""
+class CGDataset(Dataset):
+    """Cell graph dataset."""
 
     def __init__(
         self,
-        cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
-        tissue_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
-        assign_mat_path: str = None,
-        load_in_ram: bool = False,
+        cell_graphs: Tuple[List[DGLGraph], List[int]],
+        load_in_ram: bool = False
     ):
         """
-        Cell graph and/or tissue graph dataset constructor.
+        Cell graph dataset constructor.
 
         Args:
-            cell_graphs (Optional[Tuple[List[DGLGraph], List[int]]]):
-                Cell graphs for a given split (e.g., test) and their labels. Defaults to None.
-            tissue_graphs (Optional[Tuple[List[DGLGraph], List[int]]]):
-                Tissue graphs for a given split (e.g., test) and their labels. Defaults to None.
-            assign_mat_path (str, optional): Assignment matrices path. Defaults to None.
+            cell_graphs (Tuple[List[DGLGraph], List[int]]):
+                Cell graphs for a given split (e.g., test) and their labels.
             load_in_ram (bool, optional): Loading data in RAM. Defaults to False.
         """
-        super(CGTGDataset, self).__init__()
+        super(CGDataset, self).__init__()
 
-        if (cell_graphs is None) and (tissue_graphs is None):
-            raise ValueError("You must provide at least 1 modality.")
-
-        if cell_graphs is not None:
-            self.cell_graphs = cell_graphs[0]
-            self.cell_graph_labels = cell_graphs[1]
-            self.num_cg = len(self.cell_graphs)
-        if tissue_graphs is not None:
-            self.tissue_graphs = tissue_graphs[0]
-            self.tissue_graph_labels = tissue_graphs[1]
-            self.num_tg = len(self.tissue_graphs)
-        self.assign_mat_path = assign_mat_path
+        self.cell_graphs = cell_graphs[0]
+        self.cell_graph_labels = cell_graphs[1]
+        self.num_cg = len(self.cell_graphs)
         self.load_in_ram = load_in_ram
-
-        if assign_mat_path is not None:
-            self._load_assign_mat()
-
-    def _load_assign_mat(self):
-        """
-        Load assignment matrices
-        """
-        self.assign_fnames = glob(join(self.assign_mat_path, '*.h5'))
-        self.assign_fnames.sort()
-        self.num_assign_mat = len(self.assign_fnames)
-        if self.load_in_ram:
-            self.assign_matrices = [
-                h5_to_tensor(join(
-                    self.assign_mat_path, fname)).float().t()
-                for fname in self.assign_fnames
-            ]
 
     def __getitem__(self, index):
         """
@@ -101,57 +62,22 @@ class CGTGDataset(Dataset):
         Args:
             index (int): index of the example.
         """
-
-        # 1. HACT configuration
-        if hasattr(self, 'num_tg') and hasattr(self, 'num_cg'):
-            cg = self.cell_graphs[index]
-            tg = self.tissue_graphs[index]
-            assert self.cell_graph_labels[index] == self.tissue_graph_labels[
-                index], "The CG and TG are not the same. There was an issue while creating HACT."
-            label = self.cell_graph_labels[index]
-
-            if self.load_in_ram:
-                assign_mat = self.assign_matrices[index]
-            else:
-                assign_mat = h5_to_tensor(
-                    self.assign_fnames[index]).float().t()
-
-            if IS_CUDA:
-                cg = cg.to('cuda:0')
-                tg = tg.to('cuda:0')
-            assign_mat = assign_mat.cuda() if IS_CUDA else assign_mat
-
-            return cg, tg, assign_mat, label
-
-        # 2. TG-GNN configuration
-        elif hasattr(self, 'num_tg'):
-            tg = self.tissue_graphs[index]
-            label = self.tissue_graph_labels[index]
-            if IS_CUDA:
-                tg = tg.to('cuda:0')
-            return tg, label
-
-        # 3. CG-GNN configuration
-        else:
-            cg = self.cell_graphs[index]
-            label = self.cell_graph_labels[index]
-            if IS_CUDA:
-                cg = cg.to('cuda:0')
-            return cg, label
+        cg = self.cell_graphs[index]
+        label = self.cell_graph_labels[index]
+        if IS_CUDA:
+            cg = cg.to('cuda:0')
+        return cg, label
 
     def __len__(self):
         """Return the number of samples in the dataset."""
-        if hasattr(self, 'num_cg'):
-            return self.num_cg
-        else:
-            return self.num_tg
+        return self.num_cg
 
 
-def collate(batch):
+def collate(example_batch):
     """
     Collate a batch.
     Args:
-        batch (torch.tensor): a batch of examples.
+        example_batch (torch.tensor): a batch of examples.
     Returns:
         data: (tuple)
         labels: (torch.LongTensor)
@@ -161,8 +87,8 @@ def collate(batch):
 
     # collate the data
     # should 2 if CG or TG processing or 4 if HACT
-    num_modalities = len(batch[0])
-    batch = tuple([collate_fn(batch, mod_id, type(batch[0][mod_id]).__name__)
-                  for mod_id in range(num_modalities)])
+    num_modalities = len(example_batch[0])
+    example_batch = tuple([collate_fn(example_batch, mod_id, type(example_batch[0][mod_id]).__name__)
+                           for mod_id in range(num_modalities)])
 
-    return batch
+    return example_batch

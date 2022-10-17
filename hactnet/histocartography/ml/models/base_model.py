@@ -1,12 +1,8 @@
-import os
+from abc import abstractmethod
 from typing import Optional, Union
 
-import torch
+from torch import load
 from torch.nn import Module
-from abc import abstractmethod
-from ..layers.multi_layer_gnn import MultiLayerGNN
-from .zoo import MODEL_NAME_TO_URL, MODEL_NAME_TO_CONFIG
-from ...utils import download_box_link
 
 
 def get_number_of_classes(class_split):
@@ -54,26 +50,8 @@ class BaseModel(Module):
         """
         raise NotImplementedError('Implementation in subclasses.')
 
-    def _load_checkpoint(self, model_name):
-        if model_name in MODEL_NAME_TO_URL:
-            checkpoint_path = os.path.join(
-                os.path.dirname(__file__),
-                '..',
-                '..',
-                '..',
-                'checkpoints',
-                model_name
-            )
-            download_box_link(
-                url=MODEL_NAME_TO_URL[model_name],
-                out_fname=checkpoint_path
-            )
-        else:
-            checkpoint_path = model_name
-            
-        self.load_state_dict(
-            torch.load(checkpoint_path)
-        )
+    def _load_checkpoint(self, checkpoint_path):
+        self.load_state_dict(load(checkpoint_path))
 
     @abstractmethod
     def forward(self, graph):

@@ -2,10 +2,11 @@
 """
 Script for training CG-GNN, TG-GNN and HACT models
 """
+from os.path import join, isdir
 from argparse import ArgumentParser
 
 from hactnet.train import train
-from hactnet.util import load_cgtg_graphs
+from hactnet.util import load_cell_graphs
 
 
 def parse_arguments():
@@ -19,39 +20,10 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
-        '--tg_path',
-        type=str,
-        help='path to tissue graphs.',
-        default=None,
-        required=False
-    )
-    parser.add_argument(
-        '--assign_mat_path',
-        type=str,
-        help='path to the assignment matrices.',
-        default=None,
-        required=False
-    )
-    parser.add_argument(
-        '-conf',
-        '--config_fpath',
-        type=str,
-        help='path to the config file.',
-        default='',
-        required=False
-    )
-    parser.add_argument(
-        '--model_path',
+        '--model_save_path',
         type=str,
         help='path to where the model is saved.',
         default='',
-        required=False
-    )
-    parser.add_argument(
-        '--model_name',
-        type=str,
-        help='name of the model.',
-        default=None,
         required=False
     )
     parser.add_argument(
@@ -106,12 +78,21 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    train(args.config_fpath,
-          args.model_path,
-          load_cgtg_graphs(args.cg_path) if args.cg_path is not None else None,
-          load_cgtg_graphs(args.tg_path) if args.tg_path is not None else None,
-          args.assign_mat_path,
-          args.model_name,
+
+    train_dir = join(args.cg_path, 'train')
+    if isdir(train_dir):
+        cg_train = load_cell_graphs(train_dir)
+        val_dir = join(args.cg_path, 'val')
+        cg_val = load_cell_graphs(val_dir) if isdir(val_dir) else None
+        test_dir = join(args.cg_path, 'test')
+        cg_test = load_cell_graphs(test_dir) if isdir(test_dir) else None
+    else:
+        cg_train = load_cell_graphs(args.cg_path)
+        cg_val = None
+        cg_test = None
+
+    train((cg_train, cg_val, cg_test),
+          args.model_save_path,
           args.logger,
           args.in_ram,
           args.epochs,

@@ -1,14 +1,13 @@
-import dgl
-import os
-import torch
-from typing import Tuple, Union, List
+from typing import Tuple, Union
+
+from dgl import DGLGraph
+from torch import FloatTensor
 
 from ..layers.mlp import MLP
 from .base_model import BaseModel
 from .. import MultiLayerGNN
-from ..layers.constants import GNN_NODE_FEAT_IN
-from .zoo import MODEL_NAME_TO_URL, MODEL_NAME_TO_CONFIG
-from ...utils import download_box_link
+
+GNN_NODE_FEAT_IN = 'feat'
 
 
 class CellGraphModel(BaseModel):
@@ -46,50 +45,6 @@ class CellGraphModel(BaseModel):
         # 3- build classification params
         self._build_classification_params()
 
-        # 4- load pretrained weights if needed
-        if self.pretrained:
-            if isinstance(self.pretrained, str) and (self.pretrained != ''):
-                self._load_checkpoint(self.pretrained)
-            else:
-                model_name = self._get_checkpoint_id()
-                if model_name:
-                    self._load_checkpoint(model_name)
-                else:
-                    raise NotImplementedError(
-                        'There is no available CG-GNN checkpoint for the provided params.')
-
-    def _get_checkpoint_id(self):
-
-        # 1st level-check: Model type, GNN layer type, num classes
-        model_type = 'cggnn'
-        layer_type = self.gnn_params['layer_type'].replace('_layer', '')
-        num_classes = self.num_classes
-        candidate = 'bracs_' + model_type + '_' + \
-            str(num_classes) + '_classes_' + layer_type + '.pt'
-        if candidate not in list(MODEL_NAME_TO_URL.keys()):
-            return ''
-
-        # 2nd level-check: Look at all the specific params
-        cand_config = MODEL_NAME_TO_CONFIG[candidate]
-
-        for cand_key, cand_val in cand_config['gnn_params'].items():
-            if hasattr(self.cell_graph_gnn, cand_key):
-                if cand_val != getattr(self.cell_graph_gnn, cand_key):
-                    return ''
-            else:
-                if cand_val != getattr(
-                        self.cell_graph_gnn.layers[0], cand_key):
-                    return ''
-
-        for cand_key, cand_val in cand_config['classification_params'].items():
-            if cand_val != getattr(self.pred_layer, cand_key):
-                return ''
-
-        if cand_config['node_dim'] != self.node_dim:
-            return ''
-
-        return candidate
-
     def _build_cell_graph_params(self):
         """
         Build cell graph multi layer GNN
@@ -118,21 +73,21 @@ class CellGraphModel(BaseModel):
 
     def forward(
         self,
-        graph: Union[dgl.DGLGraph,
-                     Tuple[torch.tensor, torch.tensor]]
-    ) -> torch.tensor:
+        graph: Union[DGLGraph,
+                     Tuple[FloatTensor, FloatTensor]]
+    ) -> FloatTensor:
         """
         Foward pass.
 
         Args:
-            graph (Union[dgl.DGLGraph, Tuple[torch.tensor, torch.tensor]]): Cell graph to process.
+            graph (Union[dgl.DGLGraph, Tuple[FloatTensor, FloatTensor]]): Cell graph to process.
 
         Returns:
-            torch.tensor: Model output.
+            FloatTensor: Model output.
         """
 
         # 1. GNN layers over the cell graph
-        if isinstance(graph, dgl.DGLGraph):
+        if isinstance(graph, DGLGraph):
             feats = graph.ndata[GNN_NODE_FEAT_IN]
             graph_embeddings = self.cell_graph_gnn(graph, feats)
         else:

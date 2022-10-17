@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 """
-Script for training CG-GNN, TG-GNN and HACT models
+Train CG-GNN models
 """
 from os import makedirs, listdir
 from os.path import exists, join
-from uuid import uuid4
 from shutil import rmtree
-from typing import Callable, List, Tuple, Optional, Any, Sequence
+from typing import Callable, List, Tuple, Optional, Any, Sequence, Dict
 
-from yaml import safe_load
 from pandas.io.json import json_normalize
 from mlflow import log_params, log_metric, log_artifact
 from mlflow.pytorch import log_model
@@ -22,67 +20,70 @@ from sklearn.metrics import accuracy_score, f1_score, classification_report
 from dgl import DGLGraph
 from tqdm import tqdm
 
-from hactnet.histocartography.ml import CellGraphModel, TissueGraphModel, HACTModel
-from hactnet.histocartography.ml.models.base_model import BaseModel
+from hactnet.histocartography.ml import CellGraphModel
 
-from hactnet.util import CGTGDataset, collate
+from hactnet.util import CGDataset, collate
 
 # cuda support
 IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
 
+# model parameters
+DEFAULT_GNN_PARAMS = {
+    'layer_type': "pna_layer",
+    'output_dim': 64,
+    'num_layers': 3,
+    'readout_op': "lstm",
+    'readout_type': "mean",
+    'aggregators': "mean max min std",
+    'scalers': "identity amplification attenuation",
+    'avg_d': 4,
+    'dropout': 0.,
+    'graph_norm': True,
+    'batch_norm': True,
+    'towers': 1,
+    'pretrans_layers': 1,
+    'posttrans_layers': 1,
+    'divide_input': False,
+    'residual': False
+}
+DEFAULT_CLASSIFICATION_PARAMS = {
+    'num_layers': 2,
+    'hidden_dim': 128
+}
 
-def _model_name_and_path(model_name: Optional[str], model_path: str
-                         ) -> Tuple[str, Optional[str]]:
-    "Generate model name if necessary and set path to save checkpoints."
-    model_name = str(uuid4()) if (
-        model_name is None) else model_name
-    model_path = join(model_path, model_name)
+
+def _set_save_path(model_path: str) -> str:
+    "Generate model path if we need to duplicate it and set path to save checkpoints."
     if exists(model_path):
         increment = 2
         while exists(model_path + f'_{increment}'):
             increment += 1
         model_path += f'_{increment}'
     makedirs(model_path, exist_ok=False)
-    return model_name, model_path
+    return model_path
 
 
-def _create_dataset(
-    category: str,
-    cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
-    tissue_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
-    assign_mat_path: Optional[str] = None,
-    in_ram: bool = True
-) -> Optional[CGTGDataset]:
-    "Make a cell and/or tissue graph dataset."
-
-    return CGTGDataset(
-        cell_graphs,
-        tissue_graphs,
-        assign_mat_path=join(
-            assign_mat_path, category) if assign_mat_path is not None else None,
-        load_in_ram=in_ram
-    ) if (
-        (cell_graphs is not None) or (tissue_graphs is not None)
-    ) else None
+def _create_dataset(cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]],
+                    in_ram: bool = True
+                    ) -> Optional[CGDataset]:
+    "Make a cell graph dataset."
+    return CGDataset(cell_graphs, load_in_ram=in_ram) if (cell_graphs is not None) else None
 
 
 def _create_datasets(
-    cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
-    tissue_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
-    assign_mat_path: Optional[str] = None,
-    in_ram: bool = None,
+    cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
+                           Optional[Tuple[List[DGLGraph], List[int]]],
+                           Optional[Tuple[List[DGLGraph], List[int]]]],
+    in_ram: bool = True,
     k: int = 3
-) -> Tuple[CGTGDataset, Optional[CGTGDataset], Optional[CGTGDataset], Optional[KFold]]:
+) -> Tuple[CGDataset, Optional[CGDataset], Optional[CGDataset], Optional[KFold]]:
     "Make the cell and/or tissue graph datasets and the k-fold if necessary."
 
-    train_dataset = _create_dataset(
-        'train', cell_graphs, tissue_graphs, assign_mat_path)
+    train_dataset = _create_dataset(cell_graph_sets[0], in_ram)
     assert train_dataset is not None
-    val_dataset = _create_dataset(
-        'val', cell_graphs, tissue_graphs, assign_mat_path)
-    test_dataset = _create_dataset(
-        'test', cell_graphs, tissue_graphs, assign_mat_path)
+    val_dataset = _create_dataset(cell_graph_sets[1], in_ram)
+    test_dataset = _create_dataset(cell_graph_sets[2], in_ram)
 
     if (k > 0) and (val_dataset is not None):
         # stack train and validation dataloaders if both exist and k-fold cross val is activated
@@ -95,40 +96,25 @@ def _create_datasets(
     return train_dataset, val_dataset, test_dataset, kfold
 
 
-def _create_model(config: Any, config_fpath: str) -> BaseModel:
-    "Declare model based on configuration path."
-    if 'cggnn' in config_fpath:
-        return CellGraphModel(
-            gnn_params=config['gnn_params'],
-            classification_params=config['classification_params'],
-            node_dim=config['node_feat_dim'],
-            num_classes=config['num_classes']
-        ).to(DEVICE)
-    elif 'tggnn' in config_fpath:
-        return TissueGraphModel(
-            gnn_params=config['gnn_params'],
-            classification_params=config['classification_params'],
-            node_dim=config['node_feat_dim'],
-            num_classes=config['num_classes']
-        ).to(DEVICE)
-    elif 'hact' in config_fpath:
-        return HACTModel(
-            cg_gnn_params=config['cg_gnn_params'],
-            tg_gnn_params=config['tg_gnn_params'],
-            classification_params=config['classification_params'],
-            cg_node_dim=config['node_feat_dim'],
-            tg_node_dim=config['node_feat_dim'],
-            num_classes=config['num_classes']
-        ).to(DEVICE)
-    else:
-        raise ValueError(
-            'Model type not recognized. Options are: TG, CG or HACT.')
+def _create_model(
+        example_cg: DGLGraph,
+        num_classes: int,
+        gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMS,
+        classification_params: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMS
+) -> CellGraphModel:
+    "Declare model."
+    return CellGraphModel(
+        gnn_params=gnn_params,
+        classification_params=classification_params,
+        node_dim=example_cg.ndata['feat'].shape[1],
+        num_classes=num_classes
+    ).to(DEVICE)
 
 
 def _create_training_dataloaders(train_ids: Optional[Sequence[int]],
                                  test_ids: Optional[Sequence[int]],
-                                 train_dataset: CGTGDataset,
-                                 val_dataset: Optional[CGTGDataset],
+                                 train_dataset: CGDataset,
+                                 val_dataset: Optional[CGDataset],
                                  batch_size: int
                                  ) -> Tuple[DataLoader, DataLoader]:
     "Determine whether to k-fold and then create dataloaders."
@@ -166,7 +152,7 @@ def _create_training_dataloaders(train_ids: Optional[Sequence[int]],
     return train_dataloader, val_dataloader
 
 
-def _train_step(model: BaseModel,
+def _train_step(model: CellGraphModel,
                 train_dataloader: DataLoader,
                 loss_fn: Callable,
                 optimizer: Optimizer,
@@ -174,7 +160,7 @@ def _train_step(model: BaseModel,
                 fold: int,
                 step: int,
                 logger: str = None
-                ) -> Tuple[BaseModel, int]:
+                ) -> Tuple[CellGraphModel, int]:
     "Train for 1 epoch/fold."
 
     model.train()
@@ -201,7 +187,7 @@ def _train_step(model: BaseModel,
     return model, step
 
 
-def _val_step(model: BaseModel,
+def _val_step(model: CellGraphModel,
               val_dataloader: DataLoader,
               loss_fn: Callable,
               model_path: str,
@@ -212,7 +198,7 @@ def _val_step(model: BaseModel,
               best_val_accuracy: float,
               best_val_weighted_f1_score: float,
               logger: str = None
-              ) -> BaseModel:
+              ) -> CellGraphModel:
     "Run validation step."
 
     model.eval()
@@ -269,14 +255,14 @@ def _val_step(model: BaseModel,
     return model
 
 
-def _test_model(model: BaseModel,
-                test_dataset: CGTGDataset,
+def _test_model(model: CellGraphModel,
+                test_dataset: CGDataset,
                 batch_size: int,
                 loss_fn: Callable,
                 model_path: str,
                 step: int,
                 logger: Optional[str] = None
-                ) -> BaseModel:
+                ) -> CellGraphModel:
     model.eval()
     test_dataloader = DataLoader(
         test_dataset,
@@ -358,31 +344,28 @@ def _test_model(model: BaseModel,
     return model
 
 
-def train(config_fpath: str,
-          model_path: str,
-          cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
-          tissue_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
-          assign_mat_path: Optional[str] = None,
-          model_name: Optional[str] = None,
+def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
+                                 Optional[Tuple[List[DGLGraph], List[int]]],
+                                 Optional[Tuple[List[DGLGraph], List[int]]]],
+          save_path: str,
           logger: Optional[str] = None,
           in_ram: bool = True,
           epochs: int = 10,
           learning_rate: float = 10e-3,
           batch_size: int = 1,
-          k: int = 0
-          ) -> BaseModel:
-    "Train HACTNet, CG-GNN, or TG-GNN."
-
-    # load config file
-    with open(config_fpath, 'r', encoding='utf-8') as f:
-        config = safe_load(f)
+          k: int = 0,
+          gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMS,
+          classification_params: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMS
+          ) -> CellGraphModel:
+    "Train CG-GNN."
 
     # log parameters to logger
     if logger == 'mlflow':
         log_params({
             'batch_size': batch_size
         })
-        df = json_normalize(config)
+        df = json_normalize(dict(gnn_params=gnn_params,
+                                 classification_params=classification_params))
         rep = {"graph_building.": "", "model_params.": "",
                "gnn_params.": ""}  # replacement for shorter key names
         for i, j in rep.items():
@@ -392,14 +375,17 @@ def train(config_fpath: str,
             log_params({key: str(val)})
 
     # set path to save checkpoints
-    model_name, model_path = _model_name_and_path(model_name, model_path)
+    save_path = _set_save_path(save_path)
 
     # make datasets (train, validation & test)
     train_dataset, val_dataset, test_dataset, kfold = _create_datasets(
-        cell_graphs, tissue_graphs, assign_mat_path, in_ram, k)
+        cell_graph_sets, in_ram, k)
 
     # declare model
-    model = _create_model(config, config_fpath)
+    model = _create_model(cell_graph_sets[0][0][0],
+                          int(max(cell_graph_sets[0][1]))+1,
+                          gnn_params=gnn_params,
+                          classification_params=classification_params)
 
     # build optimizer
     optimizer = Adam(model.parameters(),
@@ -431,54 +417,44 @@ def train(config_fpath: str,
                 model, train_dataloader, loss_fn, optimizer, epoch, fold, step, logger)
 
             # B.) validate
-            model = _val_step(model, val_dataloader, loss_fn, model_path, epoch, fold, step,
+            model = _val_step(model, val_dataloader, loss_fn, save_path, epoch, fold, step,
                               best_val_loss, best_val_accuracy, best_val_weighted_f1_score, logger)
 
     # testing loop
     if test_dataset is not None:
         model = _test_model(model, test_dataset, batch_size,
-                            loss_fn, model_path, step, logger)
+                            loss_fn, save_path, step, logger)
 
     if logger == 'mlflow':
-        rmtree(model_path)
+        rmtree(save_path)
 
     return model
 
 
-def infer(config_fpath: str,
-          model_path: str,
-          cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
-          tissue_graphs: Optional[Tuple[List[DGLGraph], List[int]]] = None,
-          assign_mat_path: Optional[str] = None,
+def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
+          model_checkpoint_path: str,
           in_ram: bool = True,
           batch_size: int = 1,
-          pretrained: bool = True):
+          gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMS,
+          classification_params: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMS
+          ) -> None:
     """
-    Test HACTNet, CG-GNN or TG-GNN.
+    Test CG-GNN.
     Args:
         args (Namespace): parsed arguments.
     """
 
-    assert not(
-        pretrained and model_path is not None), "Provide a model path or set pretrained. Not both."
-    assert (pretrained or model_path is not None), "Provide either a model path or set pretrained."
-
-    # load config file
-    with open(config_fpath, 'r', encoding='utf-8') as f:
-        config = safe_load(f)
-
     # make test data loader
-    dataset = _create_dataset(
-        'train', cell_graphs, tissue_graphs, assign_mat_path, in_ram)
+    dataset = _create_dataset(cell_graphs, in_ram)
     assert dataset is not None
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate)
 
-    # declare model
-    model = _create_model(config, config_fpath)
-
-    # load weights if model path is provided.
-    if not pretrained:
-        model.load_state_dict(load(model_path))
+    # declare model and load weights
+    model = _create_model(cell_graphs[0][0],
+                          int(max(cell_graphs[1]))+1,
+                          gnn_params=gnn_params,
+                          classification_params=classification_params)
+    model.load_state_dict(load(model_checkpoint_path))
     model.eval()
 
     # print # of parameters
