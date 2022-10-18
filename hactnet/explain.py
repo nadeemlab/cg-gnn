@@ -5,22 +5,27 @@ As used in:
 "Quantifying Explainers of Graph Neural Networks in Computational Pathology", Jaume et al, CVPR, 2021.
 """
 
-from os.path import join, split
-from glob import glob
-from typing import Optional, List, Dict
+from os import makedirs
+from os.path import join
+from typing import List
 
-from PIL import Image
-from yaml import safe_load
 from tqdm import tqdm
+from torch import FloatTensor
 from torch.cuda import is_available
-from numpy import array, ndarray, save
 from dgl import DGLGraph
-from numpy import zeros
+from numpy import ndarray
+from bokeh.models import Circle, MultiLine, WheelZoomTool, HoverTool, CustomJS, Select, ColorBar
+from bokeh.plotting import figure, from_networkx
+from bokeh.transform import linear_cmap
+from bokeh.palettes import YlOrRd8
+from bokeh.layouts import row
+from bokeh.io import output_file, save
 
-from hactnet.histocartography.ml import CellGraphModel
-from hactnet.histocartography.interpretability import GraphGradCAMExplainer
-from hactnet.histocartography.ml.models.base_model import BaseModel
-from hactnet.histocartography.visualization import OverlayGraphVisualization, InstanceImageVisualization
+from hactnet.util import CellGraphModel
+
+from hactnet.histocartography.interpretability.grad_cam import BaseExplainer
+from hactnet.histocartography.interpretability import (
+    GraphLRPExplainer, GraphGradCAMExplainer, GraphGradCAMPPExplainer, GraphPruningExplainer)
 
 
 IS_CUDA = is_available()
@@ -28,97 +33,114 @@ DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
 N_BUFFER_PIXELS = 10
 
 
-def explain_cell_graphs(cell_graphs_by_specimen: Dict[str, List[DGLGraph]],
-                        model: Optional[BaseModel] = None,
-                        config_fpath: Optional[str] = None,
-                        model_checkpoint_fpath: Optional[str] = None,
-                        image_path: Optional[str] = None
-                        ) -> Dict[DGLGraph, ndarray]:
+def explain_cell_graphs(cell_graphs: List[DGLGraph],
+                        model: CellGraphModel,
+                        explainer_model: str,
+                        feature_names: List[str],
+                        cell_graph_names: List[str],
+                        out_directory: str
+                        ) -> None:
     """
     Generate an explanation for all the cell graphs in cell path dir.
     """
 
-    if (model is None) and ((config_fpath is None) or (model_checkpoint_fpath is None)):
-        raise ValueError(
-            "Must provide either model or config and checkpoint paths.")
+    # Define the explainer
+    explainer: BaseExplainer
+    explainer_model = explainer_model.lower().strip()
+    if explainer_model in {'lrp', 'graphlrpexplainer'}:
+        explainer = GraphLRPExplainer(model=model)
+    elif explainer_model in {'cam', 'gradcam', 'graphgradcamexplainer'}:
+        explainer = GraphGradCAMExplainer(model=model)
+    elif explainer_model in {'pp', 'campp', 'gradcampp', 'graphgradcamppexplainer'}:
+        explainer = GraphGradCAMPPExplainer(model=model)
+    elif explainer_model in {'pruning', 'gnn', 'graphpruningexplainer'}:
+        explainer = GraphPruningExplainer(model=model)
+    else:
+        raise ValueError("explainer_model not recognized.")
 
-    # 1. get cell graph & image paths
-    # cg_fnames = glob(join(cell_graph_path, '*.bin'))
-    if image_path is not None:
-        image_fnames = glob(join(image_path, '*.png'))
-
-    # 2. create model and set device and mode
-    if model is None:
-        assert (config_fpath is not None) and (
-            model_checkpoint_fpath is not None)
-
-        with open(config_fpath, 'r', encoding='utf-8') as file:
-            config = safe_load(file)
-
-        model = CellGraphModel(
-            gnn_params=config['gnn_params'],
-            classification_params=config['classification_params'],
-            node_dim=config['node_feat_dim'],
-            num_classes=config['num_classes'],
-            pretrained=model_checkpoint_fpath)
-    model = model.to(DEVICE).eval()
-
-    # 3. define the explainer
-    explainer = GraphGradCAMExplainer(model=model)
-
-    # 4. define graph visualizer
-    visualizer = OverlayGraphVisualization(
-        instance_visualizer=InstanceImageVisualization(),
-        colormap='jet',
-        node_style="fill"
-    )
-
-    # 4.5. Set model to train so it'll let us do backpropogation.
-    #      This shouldn't be necessary since we don't want the model to change at all while running
-    #      the explainer. In fact, it isn't necessary when running the original histocartography
-    #      code, but in this version of python and torch, it results in a can't-backprop-in-eval
-    #      error in torch because calculating the weights requires backprop-ing to get the
-    #      backward_hook. TODO: Fix this.
+    # Set model to train so it'll let us do backpropogation.
+    # This shouldn't be necessary since we don't want the model to change at all while running the
+    # explainer. In fact, it isn't necessary when running the original histocartography code, but
+    # in this version of python and torch, it results in a can't-backprop-in-eval error in torch
+    # because calculating the weights requires backprop-ing to get the backward_hook.
+    # TODO: Fix this.
     model = model.train()
 
-    # 5. process all the images
-    importance_scores_by_graph: Dict[DGLGraph, ndarray] = {}
-    for specimen, graphs in tqdm(cell_graphs_by_specimen.items()):
-        for graph in graphs:
+    makedirs(out_directory, exist_ok=True)
 
-            # b. run explainer
-            importance_scores, _ = explainer.process(graph.to(DEVICE))
-            assert isinstance(importance_scores, ndarray)
+    # Process the graphs
+    for i_g, g in enumerate(tqdm(cell_graphs)):
 
-            if image_path is not None:
-                # c. load corresponding image
-                image_path = [
-                    x for x in image_fnames if graph_name in x.replace(
-                        '.png', '.bin')][0]
-                _, image_name = split(image_path)
-                canvas = array(Image.open(image_path))
-            else:
-                # Get cell centroid locations
-                centroids = graph.ndata['centroid'].int()
+        # Run explainer
+        importance_scores, _ = explainer.process(g.to(DEVICE))
+        assert isinstance(importance_scores, ndarray)
+        g.ndata['importance'] = FloatTensor(importance_scores)
 
-                # Correct it so that the smallest y-value is set to N_BUFFER_PIXELS, and same
-                # for the smallest x-value
-                centroids -= centroids.min(axis=0).values
-                centroids += array((N_BUFFER_PIXELS, N_BUFFER_PIXELS))
+        # Convert to networkx graph for plotting interactive
+        gx = g.to_networkx()
+        for i in range(g.num_nodes()):
+            feats = g.ndata['feat'][i].detach().numpy()
+            for j, feat in enumerate(feature_names):
+                gx.nodes[i][feat] = feats[j]
+            gx.nodes[i]['importance'] = g.ndata['importance'][i].detach().numpy()
+            gx.nodes[i]['radius'] = gx.nodes[i]['importance']*10
+            gx.nodes[i]['histological_structure'] = g.ndata['histological_structure'][i].detach(
+            ).numpy().astype(int).item()
 
-                # Create a canvas based on the largest x and y values after correction, then add
-                # another N_BUFFER_PIXELS of padding
-                canvas = zeros((centroids.max(axis=0).values +
-                               array((N_BUFFER_PIXELS, N_BUFFER_PIXELS))).numpy())
+        # Create bokeh plot and prepare to save it to file
+        graph_name = cell_graph_names[i_g].split('/')[-1]
+        output_file(join(out_directory, graph_name + '.html'),
+                    title=graph_name)
+        f = figure(match_aspect=True, tools=[
+                   'pan', 'wheel_zoom', 'reset'], title='Cell ROI graph')
+        f.toolbar.active_scroll = f.select_one(WheelZoomTool)
+        mapper = linear_cmap(  # colors nodes according to importance by default
+            'importance', palette=YlOrRd8[::-1], low=0, high=1)
+        plot = from_networkx(gx, {i_node: dat.detach().numpy()
+                             for i_node, dat in enumerate(g.ndata['centroid'])})
+        plot.node_renderer.glyph = Circle(
+            radius='radius', fill_color=mapper, line_width=.1, fill_alpha=.7)
+        plot.edge_renderer.glyph = MultiLine(line_alpha=0.2, line_width=.5)
 
-            # d. visualize and save the output
-            node_attrs = {
-                "color": importance_scores
+        # Add color legend to right of plot
+        colorbar = ColorBar(color_mapper=mapper['transform'], width=8)
+        f.add_layout(colorbar, 'right')
+
+        # Define data that shows when hovering over a node/cell
+        hover = HoverTool(
+            tooltips="h. structure: @histological_structure", renderers=[plot.node_renderer])
+        hover.callback = CustomJS(
+            args=dict(hover=hover,
+                      source=plot.node_renderer.data_source),
+            code='const feats = ["' + '", "'.join(feature_names) + '"]' +
+            """
+            if (cb_data.index.indices.length > 0) {
+                const node_index = cb_data.index.indices[0];
+                const tooltips = [['h. structure', '@histological_structure']];
+                for (const feat_name of feats) {
+                    if (source.data[feat_name][node_index]) {
+                        tooltips.push([`${feat_name}`, `@${feat_name}`]);
+                    }   
+                }
+                hover.tooltips = tooltips;
             }
-            canvas = visualizer.process(
-                canvas, graph, node_attributes=node_attrs)
-            canvas.save(join('output', 'explainer', 'a.png'))
+        """)
 
-            importance_scores_by_graph[graph] = importance_scores
+        # Add interactive dropdown to change why field nodes are colored by
+        color_select = Select(title='Color by feature', value='importance', options=[
+                              'importance'] + feature_names)
+        color_select.js_on_change('value', CustomJS(
+            args=dict(source=plot.node_renderer.data_source,
+                      cir=plot.node_renderer.glyph),
+            code="""
+            const field = cb_obj.value;
+            cir.fill_color.field = field;
+            source.change.emit();
+            """)
+        )
 
-    return importance_scores_by_graph
+        # Place components side-by-side and save to file
+        layout = row(f, color_select)
+        f.renderers.append(plot)
+        f.add_tools(hover)
+        save(layout)

@@ -60,6 +60,13 @@ def load_cell_graphs(graph_path: str) -> Tuple[List[DGLGraph], List[int]]:
     return graphs, graph_labels
 
 
+def load_cell_graph_names(graph_path: str) -> List[str]:
+    "Load cell graph names (graph_path must be identical)."
+    cg_fnames = glob(join(graph_path, '*.bin'))
+    cg_fnames.sort()
+    return [n[:-4] for n in cg_fnames]
+
+
 class CGDataset(Dataset):
     """Cell graph dataset."""
 
