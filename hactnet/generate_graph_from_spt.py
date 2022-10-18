@@ -254,8 +254,6 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
     if save_path is not None:
         # Create save directory if it doesn't exist yet
         makedirs(save_path, exist_ok=True)
-        makedirs(path.join(save_path,
-                           'histological_structure_ids'), exist_ok=True)
 
         # Check if work has already been done by checking whether train, val, and test folders have
         # been created and populated
