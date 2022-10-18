@@ -2,7 +2,7 @@
 from argparse import ArgumentParser
 
 from hactnet.explain import explain_cell_graphs
-from hactnet.util import load_cgtg_graphs
+from hactnet.util import load_cell_graphs
 
 
 def parse_arguments():
@@ -41,5 +41,5 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    explain_cell_graphs({'': load_cgtg_graphs(args.cg_path)[0]}, None,
+    explain_cell_graphs({'': load_cell_graphs(args.cg_path)[0]}, None,
                         args.config_fpath, args.model_checkpoint, args.image_path)

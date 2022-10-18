@@ -15,6 +15,7 @@ from tqdm import tqdm
 from torch.cuda import is_available
 from numpy import array, ndarray, save
 from dgl import DGLGraph
+from numpy import zeros
 
 from hactnet.histocartography.ml import CellGraphModel
 from hactnet.histocartography.interpretability import GraphGradCAMExplainer
@@ -24,6 +25,7 @@ from hactnet.histocartography.visualization import OverlayGraphVisualization, In
 
 IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
+N_BUFFER_PIXELS = 10
 
 
 def explain_cell_graphs(cell_graphs_by_specimen: Dict[str, List[DGLGraph]],
@@ -65,11 +67,11 @@ def explain_cell_graphs(cell_graphs_by_specimen: Dict[str, List[DGLGraph]],
     explainer = GraphGradCAMExplainer(model=model)
 
     # 4. define graph visualizer
-    # visualizer = OverlayGraphVisualization(
-    #     instance_visualizer=InstanceImageVisualization(),
-    #     colormap='jet',
-    #     node_style="fill"
-    # )
+    visualizer = OverlayGraphVisualization(
+        instance_visualizer=InstanceImageVisualization(),
+        colormap='jet',
+        node_style="fill"
+    )
 
     # 4.5. Set model to train so it'll let us do backpropogation.
     #      This shouldn't be necessary since we don't want the model to change at all while running
@@ -88,25 +90,34 @@ def explain_cell_graphs(cell_graphs_by_specimen: Dict[str, List[DGLGraph]],
             importance_scores, _ = explainer.process(graph.to(DEVICE))
             assert isinstance(importance_scores, ndarray)
 
-            # if image_path is not None:
-            #     # c. load corresponding image
-            #     image_path = [
-            #         x for x in image_fnames if graph_name in x.replace(
-            #             '.png', '.bin')][0]
-            #     _, image_name = split(image_path)
-            #     image = array(Image.open(image_path))
+            if image_path is not None:
+                # c. load corresponding image
+                image_path = [
+                    x for x in image_fnames if graph_name in x.replace(
+                        '.png', '.bin')][0]
+                _, image_name = split(image_path)
+                canvas = array(Image.open(image_path))
+            else:
+                # Get cell centroid locations
+                centroids = graph.ndata['centroid'].int()
 
-            #     # d. visualize and save the output
-            #     node_attrs = {
-            #         "color": importance_scores
-            #     }
-            #     canvas = visualizer.process(
-            #         image, graph, node_attributes=node_attrs)
-            #     canvas.save(join('output', 'explainer', image_name))
-            # else:
-            #     array_path = [x.replace('.bin', '') for x in cg_fnames][0]
-            #     _, array_name = split(array_path)
-            #     save(join('output', 'explainer', array_name), importance_scores)
+                # Correct it so that the smallest y-value is set to N_BUFFER_PIXELS, and same
+                # for the smallest x-value
+                centroids -= centroids.min(axis=0).values
+                centroids += array((N_BUFFER_PIXELS, N_BUFFER_PIXELS))
+
+                # Create a canvas based on the largest x and y values after correction, then add
+                # another N_BUFFER_PIXELS of padding
+                canvas = zeros((centroids.max(axis=0).values +
+                               array((N_BUFFER_PIXELS, N_BUFFER_PIXELS))).numpy())
+
+            # d. visualize and save the output
+            node_attrs = {
+                "color": importance_scores
+            }
+            canvas = visualizer.process(
+                canvas, graph, node_attributes=node_attrs)
+            canvas.save(join('output', 'explainer', 'a.png'))
 
             importance_scores_by_graph[graph] = importance_scores
 

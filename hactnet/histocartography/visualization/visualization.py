@@ -354,6 +354,50 @@ class OverlayGraphVisualization(BaseGraphVisualization):
                     radius=next(radius),
                     width=next(thickness),
                 )
+        
+        if self.node_style == "custom":
+            for i, centroid in enumerate(centroids):
+                # Plot background
+                tile_length = next(radius)
+                t = next(thickness)
+                rd2 = tile_length/2
+                draw.rectangle(
+                    [
+                        (centroid[0] - rd2,
+                         centroid[1] + rd2),
+                        (centroid[0] + rd2,
+                         centroid[1] - rd2),
+                    ],
+                    outline=None,
+                    fill='gray',
+                    width=t,
+                )
+
+
+                c = map_value_to_color(
+                        next(color), colormap, number_of_colors
+                    )
+
+                # Checkerboard pattern with up to 7x7 features
+                side_length = tile_length / 7
+                for j, feat in enumerate(graph.ndata['feat'][i]):
+                    
+                    if feat.item() == 1:
+                        #, center square is 0,0
+                        r = j%7 - 3
+                        h = 3 - j//7
+
+                        draw.rectangle(
+                            [
+                                (centroid[0] + (r-.5)*side_length,
+                                 centroid[1] + (h+.5)*side_length),
+                                (centroid[0] + (r+.5)*side_length,
+                                 centroid[1] + (h-.5)*side_length),
+                            ],
+                            outline=None,
+                            fill=c,
+                            width=t,
+                        )
 
     def draw_edges(
             self,
