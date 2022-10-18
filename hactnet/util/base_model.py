@@ -14,8 +14,7 @@ class BaseModel(Module):
     def __init__(
         self,
         class_split: str = None,
-        num_classes: int = None,
-        pretrained: Optional[Union[str, bool]] = False
+        num_classes: int = None
     ) -> None:
         """
         Base model constructor.
@@ -25,9 +24,6 @@ class BaseModel(Module):
                                a 3-class split as: "benign+pathologicalbenign+udhVSadh+feaVSdcis+malignant".
                                Defaults to None.
             num_classes (int): Number of classes. Used if class split is not provided. Defaults to None.
-            pretrained (str/bool): If path provided, load pretrained checkoing at this path. If empty string
-                                   or False, searches the model name against known BRACS models. If None,
-                                   not pretrained. Defaults to None.
         """
         super().__init__()
 
@@ -41,8 +37,6 @@ class BaseModel(Module):
         else:
             raise ValueError(
                 'Please provide either class split or number of classes. Not both.')
-
-        self.pretrained = pretrained
 
     def _build_classification_params(self):
         """

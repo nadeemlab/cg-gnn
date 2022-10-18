@@ -20,35 +20,12 @@ from sklearn.metrics import accuracy_score, f1_score, classification_report
 from dgl import DGLGraph
 from tqdm import tqdm
 
-from hactnet.util import CellGraphModel, CGDataset, collate
+from hactnet.util import (CellGraphModel, CGDataset, collate, instantiate_model,
+                          DEFAULT_GNN_PARAMS, DEFAULT_CLASSIFICATION_PARAMS)
 
 # cuda support
 IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
-
-# model parameters
-DEFAULT_GNN_PARAMS = {
-    'layer_type': "pna_layer",
-    'output_dim': 64,
-    'num_layers': 3,
-    'readout_op': "lstm",
-    'readout_type': "mean",
-    'aggregators': "mean max min std",
-    'scalers': "identity amplification attenuation",
-    'avg_d': 4,
-    'dropout': 0.,
-    'graph_norm': True,
-    'batch_norm': True,
-    'towers': 1,
-    'pretrans_layers': 1,
-    'posttrans_layers': 1,
-    'divide_input': False,
-    'residual': False
-}
-DEFAULT_CLASSIFICATION_PARAMS = {
-    'num_layers': 2,
-    'hidden_dim': 128
-}
 
 
 def _set_save_path(model_path: str) -> str:
@@ -92,21 +69,6 @@ def _create_datasets(
     kfold = KFold(n_splits=k, shuffle=True) if k > 0 else None
 
     return train_dataset, val_dataset, test_dataset, kfold
-
-
-def _create_model(
-        example_cg: DGLGraph,
-        num_classes: int,
-        gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMS,
-        classification_params: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMS
-) -> CellGraphModel:
-    "Declare model."
-    return CellGraphModel(
-        gnn_params=gnn_params,
-        classification_params=classification_params,
-        node_dim=example_cg.ndata['feat'].shape[1],
-        num_classes=num_classes
-    ).to(DEVICE)
 
 
 def _create_training_dataloaders(train_ids: Optional[Sequence[int]],
@@ -380,10 +342,9 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
         cell_graph_sets, in_ram, k)
 
     # declare model
-    model = _create_model(cell_graph_sets[0][0][0],
-                          int(max(cell_graph_sets[0][1]))+1,
-                          gnn_params=gnn_params,
-                          classification_params=classification_params)
+    model = instantiate_model(cell_graph_sets[0],
+                              gnn_params=gnn_params,
+                              classification_params=classification_params)
 
     # build optimizer
     optimizer = Adam(model.parameters(),
@@ -448,11 +409,10 @@ def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate)
 
     # declare model and load weights
-    model = _create_model(cell_graphs[0][0],
-                          int(max(cell_graphs[1]))+1,
-                          gnn_params=gnn_params,
-                          classification_params=classification_params)
-    model.load_state_dict(load(model_checkpoint_path))
+    model = instantiate_model(cell_graphs,
+                              gnn_params=gnn_params,
+                              classification_params=classification_params,
+                              model_checkpoint_path=model_checkpoint_path)
     model.eval()
 
     # print # of parameters

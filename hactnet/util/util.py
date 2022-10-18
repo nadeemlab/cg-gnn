@@ -1,13 +1,15 @@
 """Cell/tissue graph dataset utility functions."""
 from os.path import join
 from glob import glob
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Any, Optional
 
-from torch import LongTensor, IntTensor
+from torch import LongTensor, IntTensor, load
 from torch.cuda import is_available
 from torch.utils.data import Dataset
 from dgl import batch, DGLGraph
 from dgl.data.utils import load_graphs
+
+from hactnet.util.cell_graph_model import CellGraphModel
 
 
 IS_CUDA = is_available()
@@ -19,6 +21,31 @@ COLLATE_FN = {
     'int': lambda x: IntTensor(x).to(DEVICE),
     'int64': lambda x: IntTensor(x).to(DEVICE),
     'float': lambda x: LongTensor(x).to(DEVICE)
+}
+FEATURES = 'feat'
+
+# model parameters
+DEFAULT_GNN_PARAMS = {
+    'layer_type': "pna_layer",
+    'output_dim': 64,
+    'num_layers': 3,
+    'readout_op': "lstm",
+    'readout_type': "mean",
+    'aggregators': "mean max min std",
+    'scalers': "identity amplification attenuation",
+    'avg_d': 4,
+    'dropout': 0.,
+    'graph_norm': True,
+    'batch_norm': True,
+    'towers': 1,
+    'pretrans_layers': 1,
+    'posttrans_layers': 1,
+    'divide_input': False,
+    'residual': False
+}
+DEFAULT_CLASSIFICATION_PARAMS = {
+    'num_layers': 2,
+    'hidden_dim': 128
 }
 
 
@@ -71,6 +98,24 @@ class CGDataset(Dataset):
     def __len__(self):
         """Return the number of samples in the dataset."""
         return self.num_cg
+
+
+def instantiate_model(cell_graphs: Tuple[List[DGLGraph], List[int]],
+                      gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMS,
+                      classification_params: Dict[str,
+                                                  Any] = DEFAULT_CLASSIFICATION_PARAMS,
+                      model_checkpoint_path: Optional[str] = None
+                      ) -> CellGraphModel:
+    "Returns a model set up as specified."
+    model = CellGraphModel(
+        gnn_params=gnn_params,
+        classification_params=classification_params,
+        node_dim=cell_graphs[0][0].ndata['feat'].shape[1],
+        num_classes=int(max(cell_graphs[1]))+1
+    ).to(DEVICE)
+    if model_checkpoint_path is not None:
+        model.load_state_dict(load(model_checkpoint_path))
+    return model
 
 
 def collate(example_batch):

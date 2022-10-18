@@ -32,11 +32,6 @@ def parse_arguments():
         action='store_true',
     )
     parser.add_argument(
-        '--pretrained',
-        help='if the data should be stored in RAM.',
-        action='store_true',
-    )
-    parser.add_argument(
         '-b',
         '--batch_size',
         type=int,
