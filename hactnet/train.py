@@ -7,6 +7,7 @@ from os.path import exists, join
 from shutil import rmtree
 from typing import Callable, List, Tuple, Optional, Any, Sequence, Dict
 
+from numpy import ndarray
 from pandas.io.json import json_normalize
 from mlflow import log_params, log_metric, log_artifact
 from mlflow.pytorch import log_model
@@ -390,6 +391,35 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
     return model
 
 
+def infer_with_model(cell_graphs: Tuple[List[DGLGraph], List[int]],
+                     model: CellGraphModel,
+                     in_ram: bool = True,
+                     batch_size: int = 1
+                     ) -> Tuple[ndarray, ndarray]:
+    "Given a model, infer their classes."
+
+    model = model.eval()
+
+    # make test data loader
+    dataset = _create_dataset(cell_graphs, in_ram)
+    assert dataset is not None
+    dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate)
+
+    # start testing
+    all_test_logits = []
+    all_test_labels = []
+    for batch in tqdm(dataloader, desc='Testing', unit='batch'):
+        labels = batch[-1]
+        data = batch[:-1]
+        with no_grad():
+            logits = model(*data)
+        all_test_logits.append(logits)
+        all_test_labels.append(labels)
+
+    return cat(all_test_labels).cpu().detach().numpy(), \
+        argmax(cat(all_test_logits).cpu(), dim=1).detach().numpy()
+
+
 def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
           model_checkpoint_path: str,
           in_ram: bool = True,
@@ -403,40 +433,19 @@ def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
         args (Namespace): parsed arguments.
     """
 
-    # make test data loader
-    dataset = _create_dataset(cell_graphs, in_ram)
-    assert dataset is not None
-    dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate)
-
     # declare model and load weights
     model = instantiate_model(cell_graphs,
                               gnn_params=gnn_params,
                               classification_params=classification_params,
                               model_checkpoint_path=model_checkpoint_path)
-    model.eval()
 
     # print # of parameters
     pytorch_total_params = sum(p.numel()
                                for p in model.parameters() if p.requires_grad)
     print(pytorch_total_params)
 
-    # start testing
-    all_test_logits = []
-    all_test_labels = []
-    for batch in tqdm(dataloader, desc='Testing', unit='batch'):
-        labels = batch[-1]
-        data = batch[:-1]
-        with no_grad():
-            logits = model(*data)
-        all_test_logits.append(logits)
-        all_test_labels.append(labels)
-
-    all_test_logits = cat(all_test_logits).cpu()
-    all_test_preds = argmax(all_test_logits, dim=1)
-    all_test_labels = cat(all_test_labels).cpu()
-
-    all_test_preds = all_test_preds.detach().numpy()
-    all_test_labels = all_test_labels.detach().numpy()
+    all_test_labels, all_test_preds = infer_with_model(
+        cell_graphs, model, in_ram, batch_size)
 
     accuracy = accuracy_score(all_test_labels, all_test_preds)
     weighted_f1_score = f1_score(

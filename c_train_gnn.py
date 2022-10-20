@@ -15,9 +15,7 @@ def parse_arguments():
     parser.add_argument(
         '--cg_path',
         type=str,
-        help='path to the cell graphs.',
-        default=None,
-        required=False
+        help='path to the cell graphs.'
     )
     parser.add_argument(
         '--model_save_path',

@@ -1,4 +1,4 @@
-"Explain a cell graph (CG) prediction using a pretrained CG-GNN and a graph explainer: GraphGradCAM."
+"Explain a cell graph (CG) prediction using a pretrained CG-GNN and a graph explainer."
 from argparse import ArgumentParser
 
 from pandas import read_hdf
@@ -27,8 +27,18 @@ def parse_arguments():
         '--model_checkpoint_path',
         type=str,
         help='Path to the model checkpoint.',
-        default=None,
-        required=False
+        required=True
+    )
+    parser.add_argument(
+        '--cell_data_hdf_path',
+        type=str,
+        help='Where to find the data for cells to lookup feature and phenotype names.',
+        required=True
+    )
+    parser.add_argument(
+        '--prune_misclassified',
+        help='Remove entries for misclassified cell graphs when calculating separability scores.',
+        action='store_true'
     )
     parser.add_argument(
         '--out_directory',
@@ -43,11 +53,19 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     cell_graphs = load_cell_graphs(args.cg_path)
-    explain_cell_graphs(cell_graphs[0],
-                        instantiate_model(
-                            cell_graphs, model_checkpoint_path=args.model_checkpoint_path),
-                        args.explainer,
-                        [col[3:] for col in read_hdf(
-                            "data/melanoma_cells.h5").columns.values if col.startswith('FT_')],
-                        load_cell_graph_names(args.cg_path),
-                        args.out_directory)
+    columns = read_hdf(args.cell_data_hdf_path).columns.values
+    df_concept, df_aggregated = explain_cell_graphs(
+        cell_graphs,
+        instantiate_model(
+            cell_graphs, model_checkpoint_path=args.model_checkpoint_path),
+        args.explainer,
+        [g.ndata['phenotypes'] for g in cell_graphs[0]],
+        [col[3:] for col in columns if col.startswith('PH_')],
+        prune_misclassified=args.prune_misclassified,
+        feature_names=[col[3:] for col in columns if col.startswith(
+            'FT_')] if (args.out_directory is not None) else None,
+        cell_graph_names=load_cell_graph_names(args.cg_path) if (
+            args.out_directory is not None) else None,
+        out_directory=args.out_directory)
+    print(df_concept)
+    print(df_aggregated)
