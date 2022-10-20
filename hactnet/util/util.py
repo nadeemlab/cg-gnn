@@ -1,7 +1,9 @@
 """Cell/tissue graph dataset utility functions."""
 from os.path import join
+from importlib import import_module
+from copy import deepcopy
 from glob import glob
-from typing import Tuple, List, Dict, Any, Optional
+from typing import Tuple, List, Dict, Any, Optional, Iterable
 
 from torch import LongTensor, IntTensor, load
 from torch.cuda import is_available
@@ -9,7 +11,7 @@ from torch.utils.data import Dataset
 from dgl import batch, DGLGraph
 from dgl.data.utils import load_graphs
 
-from hactnet.util.cell_graph_model import CellGraphModel
+from hactnet.util.ml.cell_graph_model import CellGraphModel
 
 
 IS_CUDA = is_available()
@@ -144,3 +146,34 @@ def collate(example_batch):
                            for mod_id in range(num_modalities)])
 
     return example_batch
+
+
+def dynamic_import_from(source_file: str, class_name: str) -> Any:
+    """Do a from source_file import class_name dynamically
+
+    Args:
+        source_file (str): Where to import from
+        class_name (str): What to import
+
+    Returns:
+        Any: The class to be imported
+    """
+    module = import_module(source_file)
+    return getattr(module, class_name)
+
+
+def signal_last(input_iterable: Iterable[Any]) -> Iterable[Tuple[bool, Any]]:
+    iterable = iter(input_iterable)
+    return_value = next(iterable)
+    for value in iterable:
+        yield False, return_value
+        return_value = value
+    yield True, return_value
+
+
+def copy_graph(x):
+    return deepcopy(x)
+
+
+def torch_to_numpy(x):
+    return x.cpu().detach().numpy()

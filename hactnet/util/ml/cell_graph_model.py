@@ -5,7 +5,7 @@ from torch import FloatTensor
 
 from .layers.mlp import MLP
 from .base_model import BaseModel
-from .multi_layer_gnn import MultiLayerGNN
+from .layers.multi_layer_gnn import MultiLayerGNN
 
 GNN_NODE_FEAT_IN = 'feat'
 

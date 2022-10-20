@@ -33,9 +33,8 @@ from matplotlib.pyplot import plot, title, savefig, legend, clf
 from hactnet.util import CellGraphModel
 from hactnet.train import infer_with_model
 
-from hactnet.histocartography.interpretability.grad_cam import BaseExplainer
-from hactnet.histocartography.interpretability import (
-    GraphLRPExplainer, GraphGradCAMExplainer, GraphGradCAMPPExplainer, GraphPruningExplainer)
+from hactnet.util.interpretability import (BaseExplainer, GraphLRPExplainer, GraphGradCAMExplainer,
+                                           GraphGradCAMPPExplainer, GraphPruningExplainer)
 
 
 IS_CUDA = is_available()
