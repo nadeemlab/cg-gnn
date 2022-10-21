@@ -40,17 +40,17 @@ def _set_save_path(model_path: str) -> str:
     return model_path
 
 
-def _create_dataset(cell_graphs: Optional[Tuple[List[DGLGraph], List[int]]],
+def _create_dataset(cell_graphs: Tuple[List[DGLGraph], List[int]],
                     in_ram: bool = True
                     ) -> Optional[CGDataset]:
     "Make a cell graph dataset."
-    return CGDataset(cell_graphs, load_in_ram=in_ram) if (cell_graphs is not None) else None
+    return CGDataset(cell_graphs, load_in_ram=in_ram) if (len(cell_graphs[0]) > 0) else None
 
 
 def _create_datasets(
     cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
-                           Optional[Tuple[List[DGLGraph], List[int]]],
-                           Optional[Tuple[List[DGLGraph], List[int]]]],
+                           Tuple[List[DGLGraph], List[int]],
+                           Tuple[List[DGLGraph], List[int]]],
     in_ram: bool = True,
     k: int = 3
 ) -> Tuple[CGDataset, Optional[CGDataset], Optional[CGDataset], Optional[KFold]]:
@@ -306,8 +306,8 @@ def _test_model(model: CellGraphModel,
 
 
 def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
-                                 Optional[Tuple[List[DGLGraph], List[int]]],
-                                 Optional[Tuple[List[DGLGraph], List[int]]]],
+                                 Tuple[List[DGLGraph], List[int]],
+                                 Tuple[List[DGLGraph], List[int]]],
           save_path: str,
           logger: Optional[str] = None,
           in_ram: bool = True,

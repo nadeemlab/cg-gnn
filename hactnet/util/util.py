@@ -99,7 +99,7 @@ class CGDataset(Dataset):
             index (int): index of the example.
         """
         cg = self.cell_graphs[index]
-        label = self.cell_graph_labels[index]
+        label = float(self.cell_graph_labels[index])
         if IS_CUDA:
             cg = cg.to('cuda:0')
         return cg, label

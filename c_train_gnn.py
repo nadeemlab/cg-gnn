@@ -4,6 +4,9 @@ Script for training CG-GNN, TG-GNN and HACT models
 """
 from os.path import join, isdir
 from argparse import ArgumentParser
+from typing import Tuple, List
+
+from dgl import DGLGraph
 
 from hactnet.train import train
 from hactnet.util import load_cell_graphs
@@ -78,16 +81,18 @@ if __name__ == "__main__":
     args = parse_arguments()
 
     train_dir = join(args.cg_path, 'train')
+    cg_val: Tuple[List[DGLGraph], List[int]] = ([], [])
+    cg_test: Tuple[List[DGLGraph], List[int]] = ([], [])
     if isdir(train_dir):
         cg_train = load_cell_graphs(train_dir)
         val_dir = join(args.cg_path, 'val')
-        cg_val = load_cell_graphs(val_dir) if isdir(val_dir) else None
+        if isdir(val_dir):
+            cg_val = load_cell_graphs(val_dir)
         test_dir = join(args.cg_path, 'test')
-        cg_test = load_cell_graphs(test_dir) if isdir(test_dir) else None
+        if isdir(test_dir):
+            cg_test = load_cell_graphs(test_dir)
     else:
         cg_train = load_cell_graphs(args.cg_path)
-        cg_val = None
-        cg_test = None
 
     train((cg_train, cg_val, cg_test),
           args.model_save_path,
