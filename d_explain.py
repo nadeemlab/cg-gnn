@@ -54,7 +54,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     cell_graphs = load_cell_graphs(args.cg_path)
     columns = read_hdf(args.cell_data_hdf_path).columns.values
-    df_concept, df_aggregated = explain_cell_graphs(
+    df_concept, df_aggregated, dfs_k_dist = explain_cell_graphs(
         cell_graphs,
         instantiate_model(
             cell_graphs, model_checkpoint_path=args.model_checkpoint_path),
@@ -69,3 +69,6 @@ if __name__ == "__main__":
         out_directory=args.out_directory)
     print(df_concept)
     print(df_aggregated)
+    for cg_pair, df_k in dfs_k_dist.items():
+        print(cg_pair)
+        print(df_k)

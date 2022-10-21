@@ -70,7 +70,9 @@ class AttributeSeparability:
         attribute_list: List[ndarray],
         label_list: List[int],
         attribute_names: List[str]
-    ) -> Tuple[Dict[Tuple[int, int], Dict[str, float]], Dict[int, Dict[int, ndarray]]]:
+    ) -> Tuple[Dict[Tuple[int, int], Dict[str, float]],
+               Dict[int, Dict[int, ndarray]],
+               Dict[Tuple[int, int], Dict[int, Tuple[int, float]]]]:
         """
         Derive metrics based on the explainer importance scores and nuclei-level concepts.
 
@@ -95,9 +97,12 @@ class AttributeSeparability:
         all_distances = self._compute_hist_distances(all_histograms, n_attrs)
 
         # 5. compute the AUC over the #k: output will be Omega x #c
+        # Addition: find the k-value with the max distance
         all_aucs: Dict[Tuple[int, int], Dict[str, float]] = {}
+        k_max_dist: Dict[Tuple[int, int], Dict[int, Tuple[int, float]]] = {}
         for class_pair_id in range(self.n_class_pairs):
             all_aucs[self.class_pairs[class_pair_id]] = {}
+            k_max_dist[self.class_pairs[class_pair_id]] = {}
             for attr_id in range(n_attrs):
                 attr_name = attribute_names[attr_id]
                 all_aucs[self.class_pairs[class_pair_id]][attr_name] = auc(
@@ -106,7 +111,17 @@ class AttributeSeparability:
                     all_distances[:, class_pair_id, attr_id]
                 )
 
-        return all_aucs, all_histograms
+                k_max = self.keep_nuclei_list[0]
+                max_dist = all_distances[k_max, class_pair_id, attr_id]
+                for i, k in enumerate(self.keep_nuclei_list):
+                    dist = all_distances[i, class_pair_id, attr_id]
+                    if dist > max_dist:
+                        k_max = k
+                        max_dist = dist
+                k_max_dist[self.class_pairs[class_pair_id]
+                           ][attr_id] = (k_max, max_dist)
+
+        return all_aucs, all_histograms, k_max_dist
 
     def _compute_hist_distances(
         self,
@@ -492,7 +507,7 @@ def calculate_separability(importance_scores: List[ndarray],
                            risk: Optional[ndarray] = None,
                            patho_prior: Optional[ndarray] = None,
                            out_directory: Optional[str] = None
-                           ) -> Tuple[DataFrame, DataFrame]:
+                           ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame]]:
     "Generate separability scores for each concept."
 
     assert len(importance_scores) == len(labels) == len(attributes)
@@ -510,8 +525,13 @@ def calculate_separability(importance_scores: List[ndarray],
         assert len(risk) == len(classes)
 
     # Compute separability scores
-    separability_calculator = AttributeSeparability(classes)
-    separability_scores, all_histograms = separability_calculator.process(
+    least_cells = attributes[0].shape[0]
+    for graph_attribute in attributes:
+        if graph_attribute.shape[0] < least_cells:
+            least_cells = graph_attribute.shape[0]
+    separability_calculator = AttributeSeparability(
+        classes, list(range(1, least_cells, max((1, round(least_cells/100))))))
+    separability_scores, all_histograms, k_max_dist = separability_calculator.process(
         importance_list=importance_scores,
         attribute_list=attributes,
         label_list=labels,
@@ -540,7 +560,15 @@ def calculate_separability(importance_scores: List[ndarray],
             risk, patho_prior)
     if all(risk == risk[0]):
         df_aggregated.drop('agg_with_risk', axis=0, inplace=True)
-    return DataFrame(metric_analyser.separability_scores), df_aggregated
+
+    k_max_dist_dfs: Dict[Tuple[int, int], DataFrame] = {}
+    for class_pair, k_data in k_max_dist.items():
+        k_max_dist_dfs[class_pair] = DataFrame(
+            {'k': [dat[0] for dat in k_data.values()],
+             'dist': [dat[1] for dat in k_data.values()]},
+            index=[attribute_names[i] for i in k_data.keys()])
+
+    return DataFrame(metric_analyser.separability_scores), df_aggregated, k_max_dist_dfs
 
 
 def explain_cell_graphs(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
@@ -556,7 +584,7 @@ def explain_cell_graphs(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]]
                         feature_names: Optional[List[str]] = None,
                         cell_graph_names: Optional[List[str]] = None,
                         out_directory: Optional[str] = None
-                        ) -> Tuple[DataFrame, DataFrame]:
+                        ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame]]:
     "Generate explanations for all the cell graphs."
 
     cell_graphs = cell_graphs_and_labels[0]
