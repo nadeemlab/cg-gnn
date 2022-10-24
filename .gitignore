@@ -13,6 +13,7 @@ mlruns/
 models/*
 output/
 tmp/
+out/
 
 # Misc.
 .trash/
