@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from pandas import read_hdf
 
 from hactnet.explain import calculate_separability
-from hactnet.util import load_cell_graphs, load_cell_graph_names, instantiate_model
+from hactnet.util import load_cell_graphs, instantiate_model
 
 
 def parse_arguments():
@@ -45,12 +45,15 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    cell_graphs = load_cell_graphs(args.cg_path)
+    cell_graphs_data = load_cell_graphs(args.cg_path)
+    cell_graphs = [d.g for d in cell_graphs_data]
+    cell_graph_labels = [d.label for d in cell_graphs_data]
+    cell_graph_combo = (cell_graphs, cell_graph_labels)
     df_concept, df_aggregated, dfs_k_dist = calculate_separability(
-        cell_graphs,
+        cell_graph_combo,
         instantiate_model(
-            cell_graphs, model_checkpoint_path=args.model_checkpoint_path),
-        [g.ndata['phenotypes'] for g in cell_graphs[0]],
+            cell_graph_combo, model_checkpoint_path=args.model_checkpoint_path),
+        [g.ndata['phenotypes'] for g in cell_graphs],
         [col[3:] for col in read_hdf(
             args.cell_data_hdf_path).columns.values if col.startswith('PH_')],
         prune_misclassified=args.prune_misclassified,

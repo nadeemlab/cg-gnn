@@ -80,19 +80,19 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
 
-    train_dir = join(args.cg_path, 'train')
+    graphs = load_cell_graphs(args.cg_path)
+    cg_train: Tuple[List[DGLGraph], List[int]] = ([], [])
     cg_val: Tuple[List[DGLGraph], List[int]] = ([], [])
     cg_test: Tuple[List[DGLGraph], List[int]] = ([], [])
-    if isdir(train_dir):
-        cg_train = load_cell_graphs(train_dir)
-        val_dir = join(args.cg_path, 'val')
-        if isdir(val_dir):
-            cg_val = load_cell_graphs(val_dir)
-        test_dir = join(args.cg_path, 'test')
-        if isdir(test_dir):
-            cg_test = load_cell_graphs(test_dir)
-    else:
-        cg_train = load_cell_graphs(args.cg_path)
+
+    for gd in graphs:
+        which_set: Tuple[List[DGLGraph], List[int]] = cg_train
+        if gd.train_val_test == 'val':
+            which_set = cg_val
+        elif gd.train_val_test == 'test':
+            which_set = cg_test
+        which_set[0].append(gd.g)
+        which_set[1].append(gd.label)
 
     train((cg_train, cg_val, cg_test),
           args.model_save_path,

@@ -1,9 +1,9 @@
 """Cell/tissue graph dataset utility functions."""
+from os import walk
 from os.path import join
 from importlib import import_module
 from copy import deepcopy
-from glob import glob
-from typing import Tuple, List, Dict, Any, Optional, Iterable
+from typing import Tuple, List, Dict, Any, Optional, Iterable, NamedTuple, Literal, Set
 
 from torch import LongTensor, IntTensor, load
 from torch.cuda import is_available
@@ -51,22 +51,47 @@ DEFAULT_CLASSIFICATION_PARAMS = {
 }
 
 
-def load_cell_graphs(graph_path: str) -> Tuple[List[DGLGraph], List[int]]:
-    "Load cell graphs."
-    cg_fnames = glob(join(graph_path, '*.bin'))
-    cg_fnames.sort()
-    graph_packets = [load_graphs(join(
-        graph_path, fname)) for fname in cg_fnames]
-    graphs = [entry[0][0] for entry in graph_packets]
-    graph_labels = [entry[1]['label'].item() for entry in graph_packets]
-    return graphs, graph_labels
+class GraphData(NamedTuple):
+    "Holds all data relevant to a cell graph instance."
+    g: DGLGraph
+    label: int
+    name: str
+    specimen: str
+    train_val_test: Literal['train', 'val', 'test']
 
 
-def load_cell_graph_names(graph_path: str) -> List[str]:
-    "Load cell graph names (graph_path must be identical)."
-    cg_fnames = glob(join(graph_path, '*.bin'))
-    cg_fnames.sort()
-    return [n[:-4] for n in cg_fnames]
+def load_cell_graphs(graph_path: str, train: bool = True, val: bool = True, test: bool = True) -> List[GraphData]:
+    "Load cell graphs. Must be in graph_path/<set>/<specimen>/<graph>.bin form."
+
+    which_sets: Set[Literal['train', 'val', 'test']] = set()
+    if train:
+        which_sets.add('train')
+    if val:
+        which_sets.add('val')
+    if test:
+        which_sets.add('test')
+
+    graphs: List[GraphData] = []
+    for dir_path, set_names, _ in walk(graph_path):
+        for set_name in set_names:
+            if set_name in {'train', 'test', 'val'}:
+                for set_path, specimens, _ in walk(join(dir_path, set_name)):
+                    for specimen in specimens:
+                        for specimen_path, _, g_names in walk(join(set_path, specimen)):
+                            for g_name in g_names:
+                                assert isinstance(g_name, str)
+                                if g_name.endswith('.bin'):
+                                    g, l = load_graph(
+                                        join(specimen_path, g_name))
+                                    graphs.append(
+                                        GraphData(g, l, g_name[:-4], specimen, set_name))
+    return graphs
+
+
+def load_graph(graph_path) -> Tuple[DGLGraph, int]:
+    "Load a single graph saved in the odd histocartography method."
+    graph_packet = load_graphs(graph_path)
+    return graph_packet[0][0], graph_packet[1]['label'].item()
 
 
 class CGDataset(Dataset):

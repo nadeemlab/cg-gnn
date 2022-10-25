@@ -1,11 +1,12 @@
 "Generate interactive cell graph visualizations."
 
 from argparse import ArgumentParser
+from os.path import join
 
 from pandas import read_hdf
 
 from hactnet.explain import generate_interactives
-from hactnet.util import load_cell_graphs, load_cell_graph_names
+from hactnet.util import load_cell_graphs
 
 
 def parse_arguments():
@@ -35,9 +36,10 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
+    cell_graphs_data = load_cell_graphs(args.cg_path)
     generate_interactives(
-        load_cell_graphs(args.cg_path)[0],
+        [d.g for d in cell_graphs_data],
         [col[3:] for col in read_hdf(
             args.cell_data_hdf_path).columns.values if col.startswith('FT_')],
-        load_cell_graph_names(args.cg_path),
+        [join(d.train_val_test, d.specimen, d.name) for d in cell_graphs_data],
         args.out_directory)

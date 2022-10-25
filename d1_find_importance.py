@@ -3,12 +3,11 @@
 from os.path import join
 from argparse import ArgumentParser
 
-from pandas import read_hdf
 from torch import FloatTensor
 from dgl import save_graphs
 
 from hactnet.explain import calculate_importance
-from hactnet.util import load_cell_graphs, load_cell_graph_names, instantiate_model
+from hactnet.util import load_cell_graphs, instantiate_model
 
 
 def parse_arguments():
@@ -38,10 +37,16 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    cell_graphs_and_labels = load_cell_graphs(args.cg_path)
-    cell_graphs = calculate_importance(cell_graphs_and_labels[0], instantiate_model(
-        cell_graphs_and_labels, model_checkpoint_path=args.model_checkpoint_path), args.explainer)
-    for g, l, n in zip(cell_graphs, cell_graphs_and_labels[1], load_cell_graph_names(args.cg_path)):
-        save_graphs(join(args.cg_path, n + '.bin'),
+    cell_graphs_data = load_cell_graphs(args.cg_path)
+    cell_graphs = [d.g for d in cell_graphs_data]
+    cell_graph_labels = [d.label for d in cell_graphs_data]
+    cell_graphs = calculate_importance(cell_graphs, instantiate_model(
+        (cell_graphs, cell_graph_labels), model_checkpoint_path=args.model_checkpoint_path
+    ), args.explainer)
+    for g, l, tvt, s, n in zip(cell_graphs, cell_graph_labels,
+                               [d.train_val_test for d in cell_graphs_data],
+                               [d.specimen for d in cell_graphs_data],
+                               [d.name for d in cell_graphs_data]):
+        save_graphs(join(args.cg_path, tvt, s, n + '.bin'),
                     [g],
                     {'label': FloatTensor([l])})
