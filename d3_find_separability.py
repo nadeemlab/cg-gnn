@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 
 from pandas import read_hdf
 
-from hactnet.explain import calculate_importance, generate_interactives, calculate_separability
+from hactnet.explain import calculate_separability
 from hactnet.util import load_cell_graphs, load_cell_graph_names, instantiate_model
 
 
@@ -15,13 +15,6 @@ def parse_arguments():
         type=str,
         help='Path to the cell graphs.',
         required=True
-    )
-    parser.add_argument(
-        '--explainer',
-        type=str,
-        help='Which explainer type to use.',
-        default='pp',
-        required=False
     )
     parser.add_argument(
         '--model_checkpoint_path',
@@ -53,20 +46,6 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     cell_graphs = load_cell_graphs(args.cg_path)
-    columns = read_hdf(args.cell_data_hdf_path).columns.values
-    calculate_importance(cell_graphs[0], instantiate_model(
-        cell_graphs, model_checkpoint_path=args.model_checkpoint_path), args.explainer)
-    feature_names = [col[3:] for col in columns if col.startswith(
-        'FT_')] if (args.out_directory is not None) else None
-    cell_graph_names = load_cell_graph_names(args.cg_path) if (
-        args.out_directory is not None) else None
-    if (args.out_directory is not None) and (feature_names is not None) and \
-            (cell_graph_names is not None):
-        generate_interactives(cell_graphs[0], feature_names,
-                              cell_graph_names, args.out_directory)
-    elif (feature_names is not None) or (cell_graph_names is not None):
-        raise ValueError('feature_names, cell_graph_names, and out_directory must all be provided '
-                         'to create interactive plots.')
     df_concept, df_aggregated, dfs_k_dist = calculate_separability(
         cell_graphs,
         instantiate_model(
