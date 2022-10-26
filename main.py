@@ -3,7 +3,7 @@
 from os import makedirs
 from shutil import rmtree
 from argparse import ArgumentParser
-from typing import Tuple, List
+from typing import Tuple, List, Literal
 
 from dgl import DGLGraph
 
@@ -122,6 +122,11 @@ def parse_arguments():
         default='pp',
         required=False
     )
+    parser.add_argument(
+        '--prune_misclassified',
+        help='Remove entries for misclassified cell graphs when calculating separability scores.',
+        action='store_true'
+    )
     return parser.parse_args()
 
 
@@ -131,20 +136,23 @@ if __name__ == "__main__":
     df_cell, df_label = spt_to_dataframes(
         args.analysis_study, args.measurement_study, args.specimen_study, args.host, args.dbname,
         args.user, args.password)
-    sets_data, graph_to_label, graph_names = generate_graphs(
+    graphs = generate_graphs(
         df_cell, df_label, args.val_data_prc, args.test_data_prc, args.roi_side_length)
-    tuple_sets: List[Tuple[List[DGLGraph], List[int]]] = []
-    name_sets: List[List[str]] = []
-    for set_dict in sets_data:
-        graphs = [g for g_list in set_dict.values() for g in g_list]
-        labels = [graph_to_label[g] for g in graphs]
-        name_sets.append([graph_names[g] for g in graphs])
-        tuple_sets.append((graphs, labels))
-    assert len(tuple_sets) == 3
-    assert tuple_sets[0] is not None
-    train_val_test = (tuple_sets[0], tuple_sets[1], tuple_sets[2])
+
+    train_val_test: Tuple[Tuple[List[DGLGraph], List[int]],
+                          Tuple[List[DGLGraph], List[int]],
+                          Tuple[List[DGLGraph], List[int]]] = (([], []), ([], []), ([], []))
+    for gd in graphs:
+        s: Literal[0, 1, 2] = 0
+        if gd.train_val_test == 'val':
+            s = 1
+        elif gd.train_val_test == 'test':
+            s = 2
+        train_val_test[s][0].append(gd.g)
+        train_val_test[s][1].append(gd.label)
     model = train(train_val_test, 'tmp/', logger=args.logger, epochs=args.epochs,
                   learning_rate=args.learning_rate, batch_size=args.batch_size, k=args.k)
+
     columns = df_cell.columns.values
     i = -1
     while len(train_val_test[i][0]) == 0:
@@ -157,9 +165,12 @@ if __name__ == "__main__":
         eval_set, model, args.explainer,
         [g.ndata['phenotypes'] for g in eval_set[0]],
         [col[3:] for col in columns if col.startswith('PH_')],
+        prune_misclassified=args.prune_misclassified,
         feature_names=[col[3:] for col in columns if col.startswith('FT_')],
-        cell_graph_names=name_sets[i],
+        cell_graph_names=[d.name for d in graphs
+                          if d.train_val_test == ('train', 'val', 'test')[i]],
         out_directory='out/')
+
     explanations[0].to_csv('out/separability_concept.csv')
     explanations[1].to_csv('out/separability_attribute.csv')
     for class_pair, df in explanations[2].items():

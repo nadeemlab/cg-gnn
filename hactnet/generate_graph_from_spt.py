@@ -1,5 +1,6 @@
 "Generates graph from saved SPT files."
-from os import path, makedirs, listdir
+from os import makedirs, listdir
+from os.path import join, isdir
 from random import shuffle, randint
 from warnings import warn
 from typing import Optional, Tuple, List, Dict, DefaultDict
@@ -12,11 +13,14 @@ from sklearn.neighbors import kneighbors_graph
 from pandas import DataFrame
 from scipy.spatial.distance import pdist, squareform
 
+from hactnet.util import GraphData
+
 LABEL = "label"
 CENTROID = "centroid"
 FEATURES = "feat"
 INDICES = "histological_structure"
 PHENOTYPES = "phenotypes"
+TRAIN_VAL_TEST = ('train', 'val', 'test')
 
 
 def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
@@ -193,7 +197,7 @@ def _split_rois(graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]
 
             # Calculate the number of ROIs we want in the train/test/val sets, correcting for how
             # there's already one specimen allocated to each.
-            n_train = n_graphs*p_train - len(graphs_by_specimen[specimen])
+            n_train = n_graphs*p_train - len(graphs_by_specimen[specimens[0]])
             n_val = n_graphs*p_val - n_allocated_val
             n_test = n_graphs*p_test - n_allocated_test
             if (n_train < 0) or (n_val < 0) or (n_test < 0):
@@ -230,12 +234,8 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
                     test_data_prc: int,
                     roi_side_length: int,
                     save_path: Optional[str] = None
-                    ) -> Tuple[Tuple[Dict[str, List[DGLGraph]],
-                                     Dict[str, List[DGLGraph]],
-                                     Dict[str, List[DGLGraph]]],
-                               Dict[DGLGraph, int],
-                               Dict[DGLGraph, str]]:
-    "Query the SPT server for cell-level data and slide-level labels and saves them to file."
+                    ) -> List[GraphData]:
+    "Generate cell graphs from SPT server files and save to disk if requested."
 
     # Handle inputs
     if not 0 <= val_data_prc < 100:
@@ -258,18 +258,20 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
         # Check if work has already been done by checking whether train, val, and test folders have
         # been created and populated
         set_directories: List[str] = []
-        for set_type in ('train', 'val', 'test'):
+        for set_type in TRAIN_VAL_TEST:
+            directory = join(save_path, set_type)
+            if isdir(directory) and (len(listdir(directory)) > 0):
+                raise RuntimeError(
+                    f'{set_type} set directory has already been created. '
+                    'Assuming work is done and terminating.')
+            set_directories.append(directory)
+
+            # Ensure directory exists IFF graphs are going in it
             if (set_type == 'val') and (val_prop == 0):
                 continue
             if (set_type == 'test') and (test_prop == 0):
                 continue
-            directory = path.join(save_path, set_type)
-            if path.isdir(directory) and (len(listdir(directory)) > 0):
-                raise RuntimeError(
-                    f'{set_type} set directory has already been created. '
-                    'Assuming work is done and terminating.')
             makedirs(directory, exist_ok=True)
-            set_directories.append(directory)
 
     # Create the graphs
     graphs_by_label_and_specimen, graph_names = _create_graphs_from_spt_file(
@@ -286,15 +288,23 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
                 graph_to_label[graph_instance] = label
 
     # Write graphs to file in train/val/test sets if requested
-    if save_path is not None:
-        for i, set_data in enumerate(sets_data):
-            for graphs in set_data.values():
-                if (len(graphs) > 0) and (len(set_directories) < i):
-                    raise RuntimeError(
-                        'Created a val or test entry that shouldn\' be there.')
-                for graph_instance in graphs:
-                    save_graphs(path.join(set_directories[i], graph_names[graph_instance] + '.bin'),
+    graphs_data: List[GraphData] = []
+    for i, set_data in enumerate(sets_data):
+        for specimen, graphs in set_data.items():
+            if (len(graphs) > 0) and (len(set_directories) < i):
+                raise RuntimeError(
+                    'Created a val or test entry that shouldn\'t be there.')
+            if save_path is not None:
+                specimen_directory = join(set_directories[i], specimen)
+                makedirs(specimen_directory, exist_ok=True)
+            for graph_instance in graphs:
+                label = graph_to_label[graph_instance]
+                name = graph_names[graph_instance]
+                graphs_data.append(GraphData(graph_instance, label,
+                                             name, specimen, TRAIN_VAL_TEST[i]))
+                if save_path is not None:
+                    save_graphs(join(specimen_directory, name + '.bin'),
                                 [graph_instance],
-                                {'label': Tensor([graph_to_label[graph_instance]])})
+                                {'label': Tensor([label])})
 
-    return sets_data, graph_to_label, graph_names
+    return graphs_data

@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 
 from pandas import read_hdf
 
-from hactnet.explain import calculate_importance, generate_interactives, calculate_separability
+from hactnet.explain import explain_cell_graphs
 from hactnet.util import load_cell_graphs, instantiate_model
 
 
@@ -54,31 +54,22 @@ if __name__ == "__main__":
     args = parse_arguments()
     cell_graphs_data = load_cell_graphs(args.cg_path)
     cell_graphs = [d.g for d in cell_graphs_data]
-    cell_graph_labels = [d.label for d in cell_graphs_data]
-    cell_graph_combo = (cell_graphs, cell_graph_labels)
+    cell_graph_combo = (cell_graphs, [d.label for d in cell_graphs_data])
     columns = read_hdf(args.cell_data_hdf_path).columns.values
-    calculate_importance(cell_graphs, instantiate_model(
-        cell_graph_combo, model_checkpoint_path=args.model_checkpoint_path), args.explainer)
-    feature_names = [col[3:] for col in columns if col.startswith(
-        'FT_')] if (args.out_directory is not None) else None
-    cell_graph_names = [d.name for d in cell_graphs_data] if (
-        args.out_directory is not None) else None
-    if (args.out_directory is not None) and (feature_names is not None) and \
-            (cell_graph_names is not None):
-        generate_interactives(cell_graphs, feature_names,
-                              cell_graph_names, args.out_directory)
-    elif (feature_names is not None) or (cell_graph_names is not None):
-        raise ValueError('feature_names, cell_graph_names, and out_directory must all be provided '
-                         'to create interactive plots.')
-    df_concept, df_aggregated, dfs_k_dist = calculate_separability(
+    df_concept, df_aggregated, dfs_k_dist = explain_cell_graphs(
         cell_graph_combo,
-        instantiate_model(
-            cell_graph_combo, model_checkpoint_path=args.model_checkpoint_path),
+        instantiate_model(cell_graph_combo,
+                          model_checkpoint_path=args.model_checkpoint_path),
+        args.explainer,
         [g.ndata['phenotypes'] for g in cell_graphs],
-        [col[3:] for col in read_hdf(
-            args.cell_data_hdf_path).columns.values if col.startswith('PH_')],
+        [col[3:] for col in columns if col.startswith('PH_')],
         prune_misclassified=args.prune_misclassified,
-        out_directory=args.out_directory)
+        feature_names=[col[3:] for col in columns if col.startswith('FT_')],
+        cell_graph_names=[d.name for d in cell_graphs_data] if (
+            args.out_directory is not None) else None,
+        out_directory=args.out_directory
+    )
+
     print(df_concept)
     print(df_aggregated)
     for cg_pair, df_k in dfs_k_dist.items():
