@@ -1,9 +1,10 @@
 "Generate interactive cell graph visualizations."
 
 from argparse import ArgumentParser
-from os.path import join
+from typing import Dict, List, DefaultDict
 
 from pandas import read_hdf
+from dgl import DGLGraph
 
 from hactnet.explain import generate_interactives
 from hactnet.util import load_cell_graphs
@@ -25,6 +26,11 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
+        '--merge_rois',
+        help='Merge ROIs together by specimen.',
+        action='store_true'
+    )
+    parser.add_argument(
         '--out_directory',
         type=str,
         help='Where to save the output graph visualizations.',
@@ -37,9 +43,15 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     cell_graphs_data = load_cell_graphs(args.cg_path)
+    graph_groups: Dict[str, List[DGLGraph]] = DefaultDict(list)
+    for g in cell_graphs_data:
+        if args.merge_rois:
+            graph_groups[g.specimen].append(g.g)
+        else:
+            graph_groups[g.name].append(g.g)
+    columns = read_hdf(args.cell_data_hdf_path).columns.values
     generate_interactives(
-        [d.g for d in cell_graphs_data],
-        [col[3:] for col in read_hdf(
-            args.cell_data_hdf_path).columns.values if col.startswith('FT_')],
-        [join(d.train_val_test, d.specimen, d.name) for d in cell_graphs_data],
+        graph_groups,
+        [col[3:] for col in columns if col.startswith('FT_')],
+        [col[3:] for col in columns if col.startswith('PH_')],
         args.out_directory)

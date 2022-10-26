@@ -123,6 +123,11 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
+        '--merge_rois',
+        help='Merge ROIs together by specimen.',
+        action='store_true'
+    )
+    parser.add_argument(
         '--prune_misclassified',
         help='Remove entries for misclassified cell graphs when calculating separability scores.',
         action='store_true'
@@ -162,9 +167,10 @@ if __name__ == "__main__":
     eval_set = train_val_test[i]
     assert eval_set is not None
     explanations = explain_cell_graphs(
-        eval_set, model, args.explainer,
+        graphs, model, args.explainer,
         [g.ndata['phenotypes'] for g in eval_set[0]],
         [col[3:] for col in columns if col.startswith('PH_')],
+        merge_rois=args.merge_rois,
         prune_misclassified=args.prune_misclassified,
         feature_names=[col[3:] for col in columns if col.startswith('FT_')],
         cell_graph_names=[d.name for d in graphs

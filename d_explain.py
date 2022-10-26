@@ -36,6 +36,11 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
+        '--merge_rois',
+        help='Merge ROIs together by specimen.',
+        action='store_true'
+    )
+    parser.add_argument(
         '--prune_misclassified',
         help='Remove entries for misclassified cell graphs when calculating separability scores.',
         action='store_true'
@@ -57,12 +62,13 @@ if __name__ == "__main__":
     cell_graph_combo = (cell_graphs, [d.label for d in cell_graphs_data])
     columns = read_hdf(args.cell_data_hdf_path).columns.values
     df_concept, df_aggregated, dfs_k_dist = explain_cell_graphs(
-        cell_graph_combo,
+        cell_graphs_data,
         instantiate_model(cell_graph_combo,
                           model_checkpoint_path=args.model_checkpoint_path),
         args.explainer,
         [g.ndata['phenotypes'] for g in cell_graphs],
         [col[3:] for col in columns if col.startswith('PH_')],
+        merge_rois=args.merge_rois,
         prune_misclassified=args.prune_misclassified,
         feature_names=[col[3:] for col in columns if col.startswith('FT_')],
         cell_graph_names=[d.name for d in cell_graphs_data] if (
