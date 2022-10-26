@@ -291,10 +291,10 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
     graphs_data: List[GraphData] = []
     for i, set_data in enumerate(sets_data):
         for specimen, graphs in set_data.items():
-            if (len(graphs) > 0) and (len(set_directories) < i):
-                raise RuntimeError(
-                    'Created a val or test entry that shouldn\'t be there.')
             if save_path is not None:
+                if (len(graphs) > 0) and (len(set_directories) < i):
+                    raise RuntimeError(
+                        'Created a val or test entry that shouldn\'t be there.')
                 specimen_directory = join(set_directories[i], specimen)
                 makedirs(specimen_directory, exist_ok=True)
             for graph_instance in graphs:
