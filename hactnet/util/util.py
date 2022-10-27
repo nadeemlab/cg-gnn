@@ -3,6 +3,7 @@ from os import walk
 from os.path import join
 from importlib import import_module
 from copy import deepcopy
+from json import load as json_load
 from typing import Tuple, List, Dict, Any, Optional, Iterable, NamedTuple, Literal, Set
 
 from torch import LongTensor, IntTensor, load
@@ -49,6 +50,12 @@ DEFAULT_CLASSIFICATION_PARAMS = {
     'num_layers': 2,
     'hidden_dim': 128
 }
+
+
+def load_label_to_result(path: str) -> Dict[int, str]:
+    "Read in label_to_result JSON."
+    return {int(label): result for label, result in json_load(
+        open(path, encoding='utf-8')).items()}
 
 
 class GraphData(NamedTuple):

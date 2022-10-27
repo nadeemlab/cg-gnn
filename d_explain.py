@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from pandas import read_hdf
 
 from hactnet.explain import explain_cell_graphs
-from hactnet.util import load_cell_graphs, instantiate_model
+from hactnet.util import load_cell_graphs, instantiate_model, load_label_to_result
 
 
 def parse_arguments():
@@ -46,6 +46,12 @@ def parse_arguments():
         action='store_true'
     )
     parser.add_argument(
+        '--label_to_result_path',
+        type=str,
+        help='Where to find the data mapping label ints to their string results.',
+        required=False
+    )
+    parser.add_argument(
         '--out_directory',
         type=str,
         help='Where to save the output graph visualizations.',
@@ -70,9 +76,11 @@ if __name__ == "__main__":
         [col[3:] for col in columns if col.startswith('PH_')],
         merge_rois=args.merge_rois,
         prune_misclassified=args.prune_misclassified,
-        feature_names=[col[3:] for col in columns if col.startswith('FT_')],
+        feature_names=[col[3:] for col in columns if col.startswith('FT_')] if (
+            args.out_directory is not None) else None,
         cell_graph_names=[d.name for d in cell_graphs_data] if (
             args.out_directory is not None) else None,
+        label_to_result=load_label_to_result(args.label_to_result_path),
         out_directory=args.out_directory
     )
 

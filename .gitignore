@@ -7,6 +7,7 @@
 *.csv
 *.txt
 *.npy
+*.json
 
 # Models and folders
 mlruns/

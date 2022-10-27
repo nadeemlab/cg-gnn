@@ -4,18 +4,15 @@ Query SPT PSQL database for cell-level attributes and slide-level labels and ret
 from os.path import exists
 from base64 import b64decode
 from mmap import mmap
+from json import dump
 from typing import List, Union, Tuple, Optional, Dict
 
 from psycopg2 import connect
+from numpy import sort
 from pandas import DataFrame, Series, read_sql, read_hdf
 from shapefile import Reader
 
-
-# Treatment response to label
-RESPONSE_TO_LABEL = {
-    'Non-responder': 0,
-    'Extreme responder': 1
-}
+from hactnet.util import load_label_to_result
 
 
 def _get_targets(conn, measurement_study: str) -> DataFrame:
@@ -170,9 +167,9 @@ def _create_cell_df(df_targets: DataFrame,
     return df
 
 
-def _create_label_df(conn, specimen_study: str) -> DataFrame:
+def _create_label_df(conn, specimen_study: str) -> Tuple[DataFrame, Dict[int, str]]:
     "Get slide-level results."
-    return read_sql(f"""
+    df = read_sql(f"""
         SELECT 
             slide,
             d.result
@@ -184,7 +181,10 @@ def _create_label_df(conn, specimen_study: str) -> DataFrame:
         WHERE
             hap.result='Untreated' AND
             scp.study='{specimen_study}';
-    """, conn).set_index('slide').replace(RESPONSE_TO_LABEL)
+    """, conn).set_index('slide')
+    label_to_result = {i: res for i, res in enumerate(
+        sort(df['result'].unique()))}
+    return df.replace({res: i for i, res in label_to_result.items()}), label_to_result
 
 
 def spt_to_dataframes(analysis_study: str,
@@ -195,21 +195,24 @@ def spt_to_dataframes(analysis_study: str,
                       user: str,
                       password: str,
                       output_name: Optional[str] = None
-                      ) -> Tuple[DataFrame, DataFrame]:
+                      ) -> Tuple[DataFrame, DataFrame, Dict[int, str]]:
     "Query SPT PSQL database for cell-level attributes and slide-level labels and return."
     if output_name is not None:
+        dict_filename = output_name + '_label_to_result.json'
         label_filename = output_name + '_labels.h5'
         cells_filename = output_name + '_cells.h5'
-        if exists(label_filename) and exists(cells_filename):
-            return read_hdf(cells_filename), read_hdf(label_filename)
+        if exists(label_filename) and exists(cells_filename) and exists(dict_filename):
+            return (read_hdf(cells_filename), read_hdf(label_filename),
+                    load_label_to_result(dict_filename))
     conn = connect(host=host, dbname=dbname,
                    user=user, password=password)
-    df_label = _create_label_df(conn, specimen_study)
+    df_label, label_to_result = _create_label_df(conn, specimen_study)
     df_cells = _create_cell_df(_get_targets(conn, measurement_study),
                                _get_target_names(conn),
                                _get_phenotypes(conn, analysis_study),
                                _get_centroids(_get_shape_strings(conn, measurement_study)))
     if output_name is not None:
+        dump(label_to_result, open(dict_filename, 'w', encoding='utf-8'))
         df_label.to_hdf(label_filename, 'labels')
         df_cells.to_hdf(cells_filename, 'cells')
-    return df_cells, df_label
+    return df_cells, df_label, label_to_result

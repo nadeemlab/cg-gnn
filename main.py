@@ -138,7 +138,7 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     makedirs('tmp/', exist_ok=True)
-    df_cell, df_label = spt_to_dataframes(
+    df_cell, df_label, label_to_result = spt_to_dataframes(
         args.analysis_study, args.measurement_study, args.specimen_study, args.host, args.dbname,
         args.user, args.password)
     graphs = generate_graphs(
@@ -175,6 +175,7 @@ if __name__ == "__main__":
         feature_names=[col[3:] for col in columns if col.startswith('FT_')],
         cell_graph_names=[d.name for d in graphs
                           if d.train_val_test == ('train', 'val', 'test')[i]],
+        label_to_result=label_to_result,
         out_directory='out/')
 
     explanations[0].to_csv('out/separability_concept.csv')
