@@ -7,7 +7,7 @@ from typing import Tuple, List, Literal
 
 from dgl import DGLGraph
 
-from hactnet.spt_to_file import spt_to_dataframes
+from hactnet.spt_to_df import spt_to_dataframes
 from hactnet.generate_graph_from_spt import generate_graphs
 from hactnet.train import train
 from hactnet.explain import explain_cell_graphs

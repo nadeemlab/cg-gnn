@@ -5,7 +5,7 @@ Note: use with the melanoma_psql conda env and not the hactnet_hpc env.
 """
 from argparse import ArgumentParser
 
-from hactnet.spt_to_file import spt_to_dataframes
+from hactnet.spt_to_df import spt_to_dataframes
 
 
 def parse_arguments():

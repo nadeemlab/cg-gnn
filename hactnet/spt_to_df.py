@@ -1,5 +1,5 @@
 """
-Query SPT PSQL database for cell-level attributes and slide-level labels and save to two pickle files.
+Query SPT PSQL database for cell-level attributes and slide-level labels and return as DataFrames.
 """
 from os.path import exists
 from base64 import b64decode
