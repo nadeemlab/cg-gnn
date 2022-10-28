@@ -35,8 +35,7 @@ def _get_targets(conn, measurement_study: str) -> DataFrame:
             JOIN histology_assessment_process hap
                 ON sdmp.specimen=hap.slide
         WHERE
-            sdmp.study='{measurement_study}' AND
-            hap.result='Untreated'
+            sdmp.study='{measurement_study}'
         ORDER BY sdmp.specimen, eq.histological_structure, eq.target;
     """, conn)
     df_targets['histological_structure'] = df_targets['histological_structure'].astype(
@@ -91,8 +90,7 @@ def _get_shape_strings(conn, measurement_study: str) -> DataFrame:
             JOIN histology_assessment_process hap
                 ON sdmp.specimen=hap.slide
         WHERE
-            sdmp.study='{measurement_study}' AND
-            hap.result='Untreated'
+            sdmp.study='{measurement_study}'
         ORDER BY histological_structure;
     """, conn)
     df_shapes['histological_structure'] = df_shapes['histological_structure'].astype(
@@ -179,7 +177,6 @@ def _create_label_df(conn, specimen_study: str) -> Tuple[DataFrame, Dict[int, st
             JOIN diagnosis d
                 ON scp.source=d.subject
         WHERE
-            hap.result='Untreated' AND
             scp.study='{specimen_study}';
     """, conn).set_index('slide')
     label_to_result = {i: res for i, res in enumerate(
