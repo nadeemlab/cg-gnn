@@ -360,8 +360,8 @@ def prune_misclassified_entries(cell_graphs_and_labels: Tuple[List[DGLGraph], Li
 
 def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
                            model: CellGraphModel,
-                           attributes: List[ndarray],
-                           attribute_names: List[str],
+                           feature_names: List[str],
+                           phenotype_names: List[str],
                            prune_misclassified: bool = True,
                            concept_grouping: Optional[Dict[str,
                                                            List[str]]] = None,
@@ -371,11 +371,18 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
                            ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame]]:
     "Generate separability scores for each concept."
 
+    # Get the importance scores, labels, features, and phenotypes from all cell graphs
     importance_scores = [g.ndata['importance']
                          for g in cell_graphs_and_labels[0]]
     labels = cell_graphs_and_labels[1]
+    attributes = [concatenate((f, g), axis=1) for f, g in zip(
+        [g.ndata['feat'] for g in cell_graphs_and_labels[0]],
+        [g.ndata['phenotypes'] for g in cell_graphs_and_labels[0]]
+    )]
+    attribute_names = feature_names + phenotype_names
 
     assert len(importance_scores) == len(labels) == len(attributes)
+    assert attributes[0].shape[1] == len(attribute_names)
 
     classes = sort(unique(labels)).tolist()
     if max(labels) + 1 != len(classes):

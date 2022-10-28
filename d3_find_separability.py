@@ -49,13 +49,13 @@ if __name__ == "__main__":
     cell_graphs = [d.g for d in cell_graphs_data]
     cell_graph_labels = [d.label for d in cell_graphs_data]
     cell_graph_combo = (cell_graphs, cell_graph_labels)
+    columns = read_hdf(args.cell_data_hdf_path).columns.values
     df_concept, df_aggregated, dfs_k_dist = calculate_separability(
         cell_graph_combo,
         instantiate_model(
             cell_graph_combo, model_checkpoint_path=args.model_checkpoint_path),
-        [g.ndata['phenotypes'] for g in cell_graphs],
-        [col[3:] for col in read_hdf(
-            args.cell_data_hdf_path).columns.values if col.startswith('PH_')],
+        [col[3:] for col in columns if col.startswith('FT_')],
+        [col[3:] for col in columns if col.startswith('PH_')],
         prune_misclassified=args.prune_misclassified,
         out_directory=args.out_directory)
     print(df_concept)

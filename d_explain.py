@@ -72,12 +72,10 @@ if __name__ == "__main__":
         instantiate_model(cell_graph_combo,
                           model_checkpoint_path=args.model_checkpoint_path),
         args.explainer,
-        [g.ndata['phenotypes'] for g in cell_graphs],
+        [col[3:] for col in columns if col.startswith('FT_')],
         [col[3:] for col in columns if col.startswith('PH_')],
         merge_rois=args.merge_rois,
         prune_misclassified=args.prune_misclassified,
-        feature_names=[col[3:] for col in columns if col.startswith('FT_')] if (
-            args.out_directory is not None) else None,
         cell_graph_names=[d.name for d in cell_graphs_data] if (
             args.out_directory is not None) else None,
         label_to_result=load_label_to_result(args.label_to_result_path),

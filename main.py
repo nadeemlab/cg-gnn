@@ -168,11 +168,10 @@ if __name__ == "__main__":
     assert eval_set is not None
     explanations = explain_cell_graphs(
         graphs, model, args.explainer,
-        [g.ndata['phenotypes'] for g in eval_set[0]],
+        [col[3:] for col in columns if col.startswith('FT_')],
         [col[3:] for col in columns if col.startswith('PH_')],
         merge_rois=args.merge_rois,
         prune_misclassified=args.prune_misclassified,
-        feature_names=[col[3:] for col in columns if col.startswith('FT_')],
         cell_graph_names=[d.name for d in graphs
                           if d.train_val_test == ('train', 'val', 'test')[i]],
         label_to_result=label_to_result,
