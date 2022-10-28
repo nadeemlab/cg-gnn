@@ -345,17 +345,12 @@ def plot_histogram(all_histograms: Dict[int, Dict[int, ndarray]],
     clf()
 
 
-def prune_misclassified_entries(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
-                                model: CellGraphModel,
-                                attributes: List[ndarray]
-                                ) -> Tuple[List[int], List[ndarray]]:
-    "Prune misclassified samples from incoming data."
-    labels = cell_graphs_and_labels[1]
-    inferred, _ = infer_with_model(cell_graphs_and_labels, model)
-    correct = (array(labels) == inferred).tolist()
-    labels = list(compress(cell_graphs_and_labels[1], correct))
-    attributes = list(compress(attributes, correct))
-    return labels, attributes
+def _misclassified(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
+                   model: CellGraphModel
+                   ) -> List[bool]:
+    "Identify which samples are misclassified."
+    labels, inferred = infer_with_model(cell_graphs_and_labels, model)
+    return (labels == inferred).tolist()
 
 
 def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
@@ -397,8 +392,10 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
         assert len(risk) == len(classes)
 
     if prune_misclassified:
-        labels, attributes = prune_misclassified_entries(
-            cell_graphs_and_labels, model, attributes)
+        mask = _misclassified(cell_graphs_and_labels, model)
+        importance_scores = list(compress(importance_scores, mask))
+        attributes = list(compress(attributes, mask))
+        labels = list(compress(labels, mask))
 
     # Compute separability scores
     least_cells = attributes[0].shape[0]
