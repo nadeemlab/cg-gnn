@@ -35,7 +35,8 @@ def _get_targets(conn, measurement_study: str) -> DataFrame:
             JOIN histology_assessment_process hap
                 ON sdmp.specimen=hap.slide
         WHERE
-            sdmp.study='{measurement_study}'
+            sdmp.study='{measurement_study}' AND
+            hs.anatomical_entity='cell'
         ORDER BY sdmp.specimen, eq.histological_structure, eq.target;
     """, conn)
     df_targets['histological_structure'] = df_targets['histological_structure'].astype(
@@ -89,8 +90,11 @@ def _get_shape_strings(conn, measurement_study: str) -> DataFrame:
                 ON df.source_generation_process=sdmp.identifier
             JOIN histology_assessment_process hap
                 ON sdmp.specimen=hap.slide
+            JOIN histological_structure hs
+                ON hsi.histological_structure=hs.identifier
         WHERE
-            sdmp.study='{measurement_study}'
+            sdmp.study='{measurement_study}' AND
+            hs.anatomical_entity='cell'
         ORDER BY histological_structure;
     """, conn)
     df_shapes['histological_structure'] = df_shapes['histological_structure'].astype(
