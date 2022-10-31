@@ -345,12 +345,12 @@ def plot_histogram(all_histograms: Dict[int, Dict[int, ndarray]],
     clf()
 
 
-def _misclassified(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
+def _misclassified(cell_graphs: List[DGLGraph],
+                   cell_graph_labels: List[int],
                    model: CellGraphModel
                    ) -> List[bool]:
     "Identify which samples are misclassified."
-    labels, inferred = infer_with_model(cell_graphs_and_labels, model)
-    return (labels == inferred).tolist()
+    return (array(cell_graph_labels) == infer_with_model(model, cell_graphs)).tolist()
 
 
 def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
@@ -392,7 +392,7 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
         assert len(risk) == len(classes)
 
     if prune_misclassified:
-        mask = _misclassified(cell_graphs_and_labels, model)
+        mask = _misclassified(cell_graphs_and_labels[0], labels, model)
         importance_scores = list(compress(importance_scores, mask))
         attributes = list(compress(attributes, mask))
         labels = list(compress(labels, mask))

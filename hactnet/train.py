@@ -7,7 +7,7 @@ from os.path import exists, join
 from shutil import rmtree
 from typing import Callable, List, Tuple, Optional, Any, Sequence, Dict
 
-from numpy import ndarray
+from numpy import ndarray, array
 from pandas.io.json import json_normalize
 from mlflow import log_params, log_metric, log_artifact
 from mlflow.pytorch import log_model
@@ -15,6 +15,7 @@ from torch import save, load, no_grad, argmax, cat
 from torch.cuda import is_available
 from torch.optim import Adam, Optimizer
 from torch.nn import CrossEntropyLoss
+from torch.nn.functional import softmax
 from torch.utils.data import ConcatDataset, DataLoader, SubsetRandomSampler
 from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score, f1_score, classification_report
@@ -40,11 +41,13 @@ def _set_save_path(model_path: str) -> str:
     return model_path
 
 
-def _create_dataset(cell_graphs: Tuple[List[DGLGraph], List[int]],
+def _create_dataset(cell_graphs: List[DGLGraph],
+                    cell_graph_labels: Optional[List[int]] = None,
                     in_ram: bool = True
                     ) -> Optional[CGDataset]:
     "Make a cell graph dataset."
-    return CGDataset(cell_graphs, load_in_ram=in_ram) if (len(cell_graphs[0]) > 0) else None
+    return CGDataset(cell_graphs, cell_graph_labels, load_in_ram=in_ram) \
+        if (len(cell_graphs) > 0) else None
 
 
 def _create_datasets(
@@ -56,10 +59,13 @@ def _create_datasets(
 ) -> Tuple[CGDataset, Optional[CGDataset], Optional[CGDataset], Optional[KFold]]:
     "Make the cell and/or tissue graph datasets and the k-fold if necessary."
 
-    train_dataset = _create_dataset(cell_graph_sets[0], in_ram)
+    train_dataset = _create_dataset(
+        cell_graph_sets[0][0], cell_graph_sets[0][1], in_ram)
     assert train_dataset is not None
-    val_dataset = _create_dataset(cell_graph_sets[1], in_ram)
-    test_dataset = _create_dataset(cell_graph_sets[2], in_ram)
+    val_dataset = _create_dataset(
+        cell_graph_sets[1][0], cell_graph_sets[1][1], in_ram)
+    test_dataset = _create_dataset(
+        cell_graph_sets[2][0], cell_graph_sets[2][1], in_ram)
 
     if (k > 0) and (val_dataset is not None):
         # stack train and validation dataloaders if both exist and k-fold cross val is activated
@@ -391,33 +397,31 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
     return model
 
 
-def infer_with_model(cell_graphs: Tuple[List[DGLGraph], List[int]],
-                     model: CellGraphModel,
+def infer_with_model(model: CellGraphModel,
+                     cell_graphs: List[DGLGraph],
                      in_ram: bool = True,
-                     batch_size: int = 1
-                     ) -> Tuple[ndarray, ndarray]:
+                     batch_size: int = 1,
+                     return_prob: bool = False
+                     ) -> ndarray:
     "Given a model, infer their classes."
 
     model = model.eval()
 
     # make test data loader
-    dataset = _create_dataset(cell_graphs, in_ram)
+    dataset = _create_dataset(cell_graphs, None, in_ram)
     assert dataset is not None
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate)
 
     # start testing
     all_test_logits = []
-    all_test_labels = []
-    for batch in tqdm(dataloader, desc='Testing', unit='batch'):
-        labels = batch[-1]
-        data = batch[:-1]
+    for data in tqdm(dataloader, desc='Testing', unit='batch'):
         with no_grad():
             logits = model(*data)
         all_test_logits.append(logits)
-        all_test_labels.append(labels)
 
-    return cat(all_test_labels).cpu().detach().numpy(), \
-        argmax(cat(all_test_logits).cpu(), dim=1).detach().numpy()
+    coalesce_function = softmax if return_prob else argmax
+    return coalesce_function(cat(all_test_logits).cpu(),
+                             dim=1).detach().numpy()
 
 
 def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
@@ -444,8 +448,9 @@ def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
                                for p in model.parameters() if p.requires_grad)
     print(pytorch_total_params)
 
-    all_test_labels, all_test_preds = infer_with_model(
-        cell_graphs, model, in_ram, batch_size)
+    all_test_preds = infer_with_model(
+        model, cell_graphs[0], in_ram, batch_size)
+    all_test_labels = array(cell_graphs[1])
 
     accuracy = accuracy_score(all_test_labels, all_test_preds)
     weighted_f1_score = f1_score(

@@ -106,7 +106,8 @@ class CGDataset(Dataset):
 
     def __init__(
         self,
-        cell_graphs: Tuple[List[DGLGraph], List[int]],
+        cell_graphs: List[DGLGraph],
+        cell_graph_labels: Optional[List[int]] = None,
         load_in_ram: bool = False
     ):
         """
@@ -119,8 +120,8 @@ class CGDataset(Dataset):
         """
         super(CGDataset, self).__init__()
 
-        self.cell_graphs = cell_graphs[0]
-        self.cell_graph_labels = cell_graphs[1]
+        self.cell_graphs = cell_graphs
+        self.cell_graph_labels = cell_graph_labels
         self.num_cg = len(self.cell_graphs)
         self.load_in_ram = load_in_ram
 
@@ -131,10 +132,9 @@ class CGDataset(Dataset):
             index (int): index of the example.
         """
         cg = self.cell_graphs[index]
-        label = float(self.cell_graph_labels[index])
         if IS_CUDA:
             cg = cg.to('cuda:0')
-        return cg, label
+        return cg if (self.cell_graph_labels is None) else (cg, float(self.cell_graph_labels[index]))
 
     def __len__(self):
         """Return the number of samples in the dataset."""
@@ -168,16 +168,16 @@ def collate(example_batch):
         data: (tuple)
         labels: (torch.LongTensor)
     """
-    def collate_fn(batch, id, type):
-        return COLLATE_FN[type]([example[id] for example in batch])
 
     # collate the data
-    # should 2 if CG or TG processing or 4 if HACT
-    num_modalities = len(example_batch[0])
-    example_batch = tuple([collate_fn(example_batch, mod_id, type(example_batch[0][mod_id]).__name__)
-                           for mod_id in range(num_modalities)])
-
-    return example_batch
+    if isinstance(example_batch[0], tuple):  # graph and label
+        def collate_fn(batch, id, type):
+            return COLLATE_FN[type]([example[id] for example in batch])
+        num_modalities = len(example_batch[0])
+        return tuple([collate_fn(example_batch, mod_id, type(example_batch[0][mod_id]).__name__)
+                      for mod_id in range(num_modalities)])
+    else:  # graph only
+        return tuple([COLLATE_FN[type(example_batch[0]).__name__](example_batch)])
 
 
 def dynamic_import_from(source_file: str, class_name: str) -> Any:
