@@ -22,13 +22,6 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--save_path',
-        type=str,
-        help='Path to save the cell graphs.',
-        default='/data/',
-        required=False
-    )
-    parser.add_argument(
         '--val_data_prc',
         type=int,
         help='Percentage of data to use as validation data. Set to 0 if you want to do k-fold '
@@ -51,10 +44,25 @@ def parse_arguments():
         default=600,
         required=False
     )
+    parser.add_argument(
+        '--target_column',
+        type=str,
+        help='Phenotype column to use to build ROIs around.',
+        default=None,
+        required=False
+    )
+    parser.add_argument(
+        '--save_path',
+        type=str,
+        help='Path to save the cell graphs.',
+        default='/data/',
+        required=False
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
     generate_graphs(read_hdf(args.spt_hdf_cell_filename), read_hdf(args.spt_hdf_label_filename),
-                    args.val_data_prc, args.test_data_prc, args.roi_side_length, args.save_path)
+                    args.val_data_prc, args.test_data_prc, args.roi_side_length,
+                    args.target_column, args.save_path)

@@ -82,6 +82,13 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
+        '--target_column',
+        type=str,
+        help='Phenotype column to use to build ROIs around.',
+        default=None,
+        required=False
+    )
+    parser.add_argument(
         '-b',
         '--batch_size',
         type=int,
@@ -141,8 +148,8 @@ if __name__ == "__main__":
     df_cell, df_label, label_to_result = spt_to_dataframes(
         args.analysis_study, args.measurement_study, args.specimen_study, args.host, args.dbname,
         args.user, args.password)
-    graphs = generate_graphs(
-        df_cell, df_label, args.val_data_prc, args.test_data_prc, args.roi_side_length)
+    graphs = generate_graphs(df_cell, df_label, args.val_data_prc, args.test_data_prc,
+                             args.roi_side_length, args.target_column)
 
     train_val_test: Tuple[Tuple[List[DGLGraph], List[int]],
                           Tuple[List[DGLGraph], List[int]],

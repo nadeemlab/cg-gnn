@@ -26,6 +26,7 @@ TRAIN_VAL_TEST = ('train', 'val', 'test')
 def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
                                  df_label_all_specimens: DataFrame,
                                  image_size: Tuple[int, int],
+                                 target_column: Optional[str] = None,
                                  k: int = 5,
                                  thresh: Optional[int] = None
                                  ) -> Tuple[Dict[int, Dict[str, List[DGLGraph]]],
@@ -40,16 +41,21 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
         # Initialize data structures
         bboxes: List[Tuple[int, int, int, int, int, int]] = []
         slide_size = df_specimen[['center_x', 'center_y']].max() + 100
-        p_tumor = df_specimen['PH_Tumor'].sum()/df_specimen.shape[0]
-        df_tumor = df_specimen.loc[df_specimen['PH_Tumor'], :]
-        d_square = squareform(pdist(df_tumor[['center_x', 'center_y']]))
+        if target_column is not None:
+            colname = f'PH_{target_column}'
+            p_target = df_specimen[colname].sum()/df_specimen.shape[0]
+            df_target = df_specimen.loc[df_specimen[colname], :]
+        else:
+            p_target = 1.
+            df_target = df_specimen
+        d_square = squareform(pdist(df_target[['center_x', 'center_y']]))
 
-        # Create as many ROIs as images will add up to the proportion of
-        # the slide's cells are tumors
+        # Create as many ROIs such that the total area of the ROIs will equal the area of the
+        # source image times the proportion of cells on that image that have the target phenotype
         n_rois = round(
-            p_tumor * prod(slide_size) / prod(image_size))
-        while (len(bboxes) < n_rois) and (df_tumor.shape[0] > 0):
-            p_dist = percentile(d_square, p_tumor, axis=0)
+            p_target * prod(slide_size) / prod(image_size))
+        while (len(bboxes) < n_rois) and (df_target.shape[0] > 0):
+            p_dist = percentile(d_square, p_target, axis=0)
             x, y = df_specimen.iloc[argmin(
                 p_dist), :][['center_x', 'center_y']].tolist()
             x_min = x - image_size[0]//2
@@ -57,10 +63,10 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
             y_min = y - image_size[1]//2
             y_max = y + image_size[1]//2
             bboxes.append((x_min, x_max, y_min, y_max, x, y))
-            p_tumor -= prod(image_size) / prod(slide_size)
-            cells_to_keep = ~df_tumor['center_x'].between(
-                x_min, x_max) & ~df_tumor['center_y'].between(y_min, y_max)
-            df_tumor = df_tumor.loc[cells_to_keep, :]
+            p_target -= prod(image_size) / prod(slide_size)
+            cells_to_keep = ~df_target['center_x'].between(
+                x_min, x_max) & ~df_target['center_y'].between(y_min, y_max)
+            df_target = df_target.loc[cells_to_keep, :]
             d_square = d_square[cells_to_keep, :][:, cells_to_keep]
 
         # Create feature, centroid, and label arrays and then the graph
@@ -233,6 +239,7 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
                     val_data_prc: int,
                     test_data_prc: int,
                     roi_side_length: int,
+                    target_column: Optional[str] = None,
                     save_path: Optional[str] = None
                     ) -> List[GraphData]:
     "Generate cell graphs from SPT server files and save to disk if requested."
@@ -275,7 +282,7 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
 
     # Create the graphs
     graphs_by_label_and_specimen, graph_names = _create_graphs_from_spt_file(
-        df_feat_all_specimens, df_label_all_specimens, image_size=roi_size)
+        df_feat_all_specimens, df_label_all_specimens, roi_size, target_column=target_column)
 
     # Split graphs into train/val/test sets as requested
     sets_data = _split_rois(graphs_by_label_and_specimen, val_prop, test_prop)
