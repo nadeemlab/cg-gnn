@@ -2,7 +2,7 @@
 """
 Script for training CG-GNN, TG-GNN and HACT models
 """
-from os.path import join, isdir
+
 from argparse import ArgumentParser
 from typing import Tuple, List
 

@@ -70,6 +70,7 @@ def _create_datasets(
     if (k > 0) and (val_dataset is not None):
         # stack train and validation dataloaders if both exist and k-fold cross val is activated
         train_dataset = ConcatDataset((train_dataset, val_dataset))
+        val_dataset = None
     elif (k == 0) and (val_dataset is None):
         # set k to 3 if not provided and no validation data is provided
         k = 3
@@ -101,6 +102,9 @@ def _create_training_dataloaders(train_ids: Optional[Sequence[int]],
             collate_fn=collate
         )
     else:
+        if val_dataset is not None:
+            raise ValueError(
+                "val_dataset provided but k-folding of training dataset requested.")
         train_subsampler = SubsetRandomSampler(train_ids)
         test_subsampler = SubsetRandomSampler(test_ids)
         train_dataloader = DataLoader(
