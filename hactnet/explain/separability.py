@@ -179,6 +179,8 @@ class AttributeSeparability:
                 # i. extract the samples of type t
                 selected_attrs = [a for l, a in zip(
                     label_list, attrs) if l == t]
+                if len(selected_attrs) == 0:
+                    raise RuntimeError(f'Missing samples of class {t}')
                 selected_attrs = concatenate(selected_attrs, axis=0)
 
                 # iii. build the histogram for all the attrs (dim = #nuclei x attr_types)
@@ -415,8 +417,8 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
     if out_directory is not None:
         makedirs(out_directory, exist_ok=True)
         for i, attribute_name in enumerate(attribute_names):
-            plot_histogram(all_histograms, out_directory,
-                           i, attribute_name, k=25)
+            plot_histogram(all_histograms, out_directory, i, attribute_name,
+                           k=25 if 25 in all_histograms else max(tuple(all_histograms.keys())))
 
     # Compute final qualitative metrics
     if concept_grouping is None:
