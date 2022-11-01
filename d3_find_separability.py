@@ -36,7 +36,7 @@ def parse_arguments():
     parser.add_argument(
         '--out_directory',
         type=str,
-        help='Where to save the output graph visualizations.',
+        help='Where to save the output reporting.',
         default=None,
         required=False
     )

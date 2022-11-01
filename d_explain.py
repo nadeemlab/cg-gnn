@@ -67,7 +67,7 @@ if __name__ == "__main__":
     cell_graphs = [d.g for d in cell_graphs_data]
     cell_graph_combo = (cell_graphs, [d.label for d in cell_graphs_data])
     columns = read_hdf(args.cell_data_hdf_path).columns.values
-    df_concept, df_aggregated, dfs_k_dist = explain_cell_graphs(
+    df_concept, df_aggregated, dfs_k_dist, importances = explain_cell_graphs(
         cell_graphs_data,
         instantiate_model(cell_graph_combo,
                           model_checkpoint_path=args.model_checkpoint_path),
@@ -82,8 +82,13 @@ if __name__ == "__main__":
         out_directory=args.out_directory
     )
 
+    print('')
     print(df_concept)
+    print('')
     print(df_aggregated)
+    print('')
     for cg_pair, df_k in dfs_k_dist.items():
         print(cg_pair)
         print(df_k)
+        print('')
+    print(len(importances))

@@ -5,6 +5,7 @@ As used in:
 "Quantifying Explainers of Graph Neural Networks in Computational Pathology", Jaume et al, CVPR, 2021.
 """
 
+from os.path import join
 from typing import List, Optional, Tuple, Dict, DefaultDict
 
 from dgl import DGLGraph
@@ -16,6 +17,7 @@ from hactnet.util.util import GraphData
 from .importance import calculate_importance
 from .plot_interactives import generate_interactives
 from .separability import calculate_separability
+from .specimen_importance import save_importances, unify_importance_across
 
 
 def _class_pair_rephrase(class_pair: Tuple[int, int], label_to_result: Dict[int, str]) -> Tuple[str, str]:
@@ -37,7 +39,8 @@ def explain_cell_graphs(cell_graphs_data: List[GraphData],
                         cell_graph_names: Optional[List[str]] = None,
                         label_to_result: Optional[Dict[int, str]] = None,
                         out_directory: Optional[str] = None
-                        ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame]]:
+                        ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame],
+                                   Dict[int, float]]:
     "Generate explanations for all the cell graphs."
 
     cell_graphs_and_labels = ([d.g for d in cell_graphs_data], [
@@ -68,4 +71,12 @@ def explain_cell_graphs(cell_graphs_data: List[GraphData],
         dfs_k_max_dist = {_class_pair_rephrase(
             class_pair, label_to_result): df for class_pair, df in dfs_k_max_dist.items()}
 
-    return df_sep_by_concept, df_sep_agg, dfs_k_max_dist
+    cell_graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
+    for cg in cell_graphs_data:
+        cell_graphs_by_specimen[cg.specimen].append(cg.g)
+    importances = unify_importance_across(
+        list(cell_graphs_by_specimen.values()), model)
+    if out_directory is not None:
+        save_importances(importances, join(out_directory, 'importances.csv'))
+
+    return df_sep_by_concept, df_sep_agg, dfs_k_max_dist, importances
