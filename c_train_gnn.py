@@ -8,8 +8,8 @@ from typing import Tuple, List
 
 from dgl import DGLGraph
 
-from hactnet.train import train
-from hactnet.util import load_cell_graphs
+from cggnns.train import train
+from cggnns.util import load_cell_graphs
 
 
 def parse_arguments():

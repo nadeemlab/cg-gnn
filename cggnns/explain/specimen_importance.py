@@ -9,8 +9,8 @@ from dgl import DGLGraph
 from numpy import average
 from pandas import Series
 
-from hactnet.util import CellGraphModel
-from hactnet.train import infer_with_model
+from cggnns.util import CellGraphModel
+from cggnns.train import infer_with_model
 
 
 def unify_importance(graphs: List[DGLGraph], model: CellGraphModel) -> Dict[int, float]:

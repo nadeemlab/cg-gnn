@@ -16,7 +16,7 @@ from ..util import torch_to_numpy
 
 
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-MODEL_MODULE = 'hactnet.util.ml'
+MODEL_MODULE = 'cggnns.util.ml'
 
 
 class GraphPruningExplainer(BaseExplainer):
@@ -180,7 +180,8 @@ class GraphPruningExplainer(BaseExplainer):
             node_importance = explainer._get_node_feats_mask()
             node_importance[node_importance < self.node_thresh] = 0.
             masked_feats = masked_feats * \
-                torch.stack(masked_feats.shape[-1] * [node_importance], dim=1).unsqueeze(dim=0).to(torch.float)
+                torch.stack(
+                    masked_feats.shape[-1] * [node_importance], dim=1).unsqueeze(dim=0).to(torch.float)
             probs = torch.nn.Softmax()(logits.cpu().squeeze()).detach().numpy()
             pred_label = torch.argmax(logits, dim=0).squeeze()
 

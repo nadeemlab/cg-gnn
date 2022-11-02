@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 from dgl import batch, DGLGraph
 from dgl.data.utils import load_graphs
 
-from hactnet.util.ml.cell_graph_model import CellGraphModel
+from cggnns.util.ml.cell_graph_model import CellGraphModel
 
 
 IS_CUDA = is_available()

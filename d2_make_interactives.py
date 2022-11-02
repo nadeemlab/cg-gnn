@@ -6,8 +6,8 @@ from typing import Dict, List, DefaultDict
 from pandas import read_hdf
 from dgl import DGLGraph
 
-from hactnet.explain import generate_interactives
-from hactnet.util import load_cell_graphs
+from cggnns.explain import generate_interactives
+from cggnns.util import load_cell_graphs
 
 
 def parse_arguments():

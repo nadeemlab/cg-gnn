@@ -24,8 +24,8 @@ from scipy.ndimage.filters import uniform_filter1d
 from pandas import DataFrame
 from matplotlib.pyplot import plot, title, savefig, legend, clf
 
-from hactnet.util import CellGraphModel
-from hactnet.train import infer_with_model
+from cggnns.util import CellGraphModel
+from cggnns.train import infer_with_model
 
 
 IS_CUDA = is_available()

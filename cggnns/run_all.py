@@ -6,10 +6,10 @@ from typing import Tuple, List, Literal, Optional
 
 from dgl import DGLGraph
 
-from hactnet.spt_to_df import spt_to_dataframes
-from hactnet.generate_graph_from_spt import generate_graphs
-from hactnet.train import train
-from hactnet.explain import explain_cell_graphs
+from cggnns.spt_to_df import spt_to_dataframes
+from cggnns.generate_graph_from_spt import generate_graphs
+from cggnns.train import train
+from cggnns.explain import explain_cell_graphs
 
 
 def run_pipeline(measurement_study: str,

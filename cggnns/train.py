@@ -22,7 +22,7 @@ from sklearn.metrics import accuracy_score, f1_score, classification_report
 from dgl import DGLGraph
 from tqdm import tqdm
 
-from hactnet.util import (CellGraphModel, CGDataset, collate, instantiate_model,
+from cggnns.util import (CellGraphModel, CGDataset, collate, instantiate_model,
                           DEFAULT_GNN_PARAMS, DEFAULT_CLASSIFICATION_PARAMS)
 
 # cuda support

@@ -3,8 +3,8 @@ from argparse import ArgumentParser
 
 from pandas import read_hdf
 
-from hactnet.explain import calculate_separability
-from hactnet.util import load_cell_graphs, instantiate_model
+from cggnns.explain import calculate_separability
+from cggnns.util import load_cell_graphs, instantiate_model
 
 
 def parse_arguments():

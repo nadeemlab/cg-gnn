@@ -3,8 +3,8 @@ from argparse import ArgumentParser
 
 from pandas import read_hdf
 
-from hactnet.explain import explain_cell_graphs
-from hactnet.util import load_cell_graphs, instantiate_model, load_label_to_result
+from cggnns.explain import explain_cell_graphs
+from cggnns.util import load_cell_graphs, instantiate_model, load_label_to_result
 
 
 def parse_arguments():

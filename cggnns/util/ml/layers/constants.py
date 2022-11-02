@@ -30,7 +30,7 @@ AVAILABLE_LAYER_TYPES = {
 }
 
 
-GNN_MODULE = 'hactnet.util.ml.layers.{}'
+GNN_MODULE = 'cggnns.util.ml.layers.{}'
 
 
 def min_nodes(graph, features):

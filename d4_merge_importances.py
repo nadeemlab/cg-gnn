@@ -6,8 +6,8 @@ from typing import Dict, List, DefaultDict
 
 from dgl import DGLGraph
 
-from hactnet.explain import unify_importance_across, save_importances
-from hactnet.util import load_cell_graphs, instantiate_model
+from cggnns.explain import unify_importance_across, save_importances
+from cggnns.util import load_cell_graphs, instantiate_model
 
 
 def parse_arguments():

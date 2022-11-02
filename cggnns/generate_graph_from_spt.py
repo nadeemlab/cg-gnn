@@ -13,7 +13,7 @@ from sklearn.neighbors import kneighbors_graph
 from pandas import DataFrame
 from scipy.spatial.distance import pdist, squareform
 
-from hactnet.util import GraphData
+from cggnns.util import GraphData
 
 LABEL = "label"
 CENTROID = "centroid"

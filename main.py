@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser
 
-from hactnet.run_all import run_pipeline
+from cggnns.run_all import run_pipeline
 
 
 def parse_arguments():

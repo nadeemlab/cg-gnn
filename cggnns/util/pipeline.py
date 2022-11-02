@@ -257,7 +257,7 @@ class PipelineRunner:
             )
             name, config = list(stage.items())[0]
             stage_class = dynamic_import_from(
-                f"hactnet.{name}", config.pop("class")
+                f"cggnns.{name}", config.pop("class")
             )
             pipeline_stage = partial(
                 stage_class,
