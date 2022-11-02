@@ -1,0 +1,79 @@
+"Run through the entire SPT CG-GNN pipeline."
+
+from os import makedirs
+from shutil import rmtree
+from typing import Tuple, List, Literal, Optional
+
+from dgl import DGLGraph
+
+from hactnet.spt_to_df import spt_to_dataframes
+from hactnet.generate_graph_from_spt import generate_graphs
+from hactnet.train import train
+from hactnet.explain import explain_cell_graphs
+
+
+def run_pipeline(measurement_study: str,
+                 analysis_study: str,
+                 specimen_study: str,
+                 host: str,
+                 dbname: str,
+                 user: str,
+                 password: str,
+                 val_data_prc: int = 15,
+                 test_data_prc: int = 15,
+                 roi_side_length: int = 600,
+                 target_column: Optional[str] = None,
+                 batch_size: int = 1,
+                 epochs: int = 10,
+                 learning_rate: float = 10e-3,
+                 logger: str = 'none',
+                 k: int = 0,
+                 explainer: str = 'pp',
+                 merge_rois: bool = True,
+                 prune_misclassified: bool = True) -> None:
+    "Run the full SPT CG-GNN pipeline."
+    makedirs('tmp/', exist_ok=True)
+    df_cell, df_label, label_to_result = spt_to_dataframes(
+        analysis_study, measurement_study, specimen_study, host, dbname,
+        user, password)
+    graphs = generate_graphs(df_cell, df_label, val_data_prc, test_data_prc,
+                             roi_side_length, target_column)
+
+    train_val_test: Tuple[Tuple[List[DGLGraph], List[int]],
+                          Tuple[List[DGLGraph], List[int]],
+                          Tuple[List[DGLGraph], List[int]]] = (([], []), ([], []), ([], []))
+    for gd in graphs:
+        s: Literal[0, 1, 2] = 0
+        if gd.train_val_test == 'val':
+            s = 1
+        elif gd.train_val_test == 'test':
+            s = 2
+        train_val_test[s][0].append(gd.g)
+        train_val_test[s][1].append(gd.label)
+    model = train(train_val_test, 'tmp/', logger=logger, epochs=epochs,
+                  learning_rate=learning_rate, batch_size=batch_size, k=k)
+
+    columns = df_cell.columns.values
+    i = -1
+    while len(train_val_test[i][0]) == 0:
+        i -= 1
+        if i < -3:
+            raise RuntimeError('all sets created are empty')
+    eval_set = train_val_test[i]
+    assert eval_set is not None
+    explanations = explain_cell_graphs(
+        graphs, model, explainer,
+        [col[3:] for col in columns if col.startswith('FT_')],
+        [col[3:] for col in columns if col.startswith('PH_')],
+        merge_rois=merge_rois,
+        prune_misclassified=prune_misclassified,
+        cell_graph_names=[d.name for d in graphs
+                          if d.train_val_test == ('train', 'val', 'test')[i]],
+        label_to_result=label_to_result,
+        out_directory='out/')
+
+    explanations[0].to_csv('out/separability_concept.csv')
+    explanations[1].to_csv('out/separability_attribute.csv')
+    for class_pair, df in explanations[2].items():
+        df.to_csv(f'out/separability_k_best_{class_pair}.csv')
+    rmtree('tmp/')

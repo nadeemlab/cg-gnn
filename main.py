@@ -1,16 +1,8 @@
-"Run through the entire SPT CGnet pipeline."
+"Run through the entire SPT CG-GNN pipeline."
 
-from os import makedirs
-from shutil import rmtree
 from argparse import ArgumentParser
-from typing import Tuple, List, Literal
 
-from dgl import DGLGraph
-
-from hactnet.spt_to_df import spt_to_dataframes
-from hactnet.generate_graph_from_spt import generate_graphs
-from hactnet.train import train
-from hactnet.explain import explain_cell_graphs
+from hactnet.run_all import run_pipeline
 
 
 def parse_arguments():
@@ -144,48 +136,22 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    makedirs('tmp/', exist_ok=True)
-    df_cell, df_label, label_to_result = spt_to_dataframes(
-        args.analysis_study, args.measurement_study, args.specimen_study, args.host, args.dbname,
-        args.user, args.password)
-    graphs = generate_graphs(df_cell, df_label, args.val_data_prc, args.test_data_prc,
-                             args.roi_side_length, args.target_column)
-
-    train_val_test: Tuple[Tuple[List[DGLGraph], List[int]],
-                          Tuple[List[DGLGraph], List[int]],
-                          Tuple[List[DGLGraph], List[int]]] = (([], []), ([], []), ([], []))
-    for gd in graphs:
-        s: Literal[0, 1, 2] = 0
-        if gd.train_val_test == 'val':
-            s = 1
-        elif gd.train_val_test == 'test':
-            s = 2
-        train_val_test[s][0].append(gd.g)
-        train_val_test[s][1].append(gd.label)
-    model = train(train_val_test, 'tmp/', logger=args.logger, epochs=args.epochs,
-                  learning_rate=args.learning_rate, batch_size=args.batch_size, k=args.k)
-
-    columns = df_cell.columns.values
-    i = -1
-    while len(train_val_test[i][0]) == 0:
-        i -= 1
-        if i < -3:
-            raise RuntimeError('all sets created are empty')
-    eval_set = train_val_test[i]
-    assert eval_set is not None
-    explanations = explain_cell_graphs(
-        graphs, model, args.explainer,
-        [col[3:] for col in columns if col.startswith('FT_')],
-        [col[3:] for col in columns if col.startswith('PH_')],
-        merge_rois=args.merge_rois,
-        prune_misclassified=args.prune_misclassified,
-        cell_graph_names=[d.name for d in graphs
-                          if d.train_val_test == ('train', 'val', 'test')[i]],
-        label_to_result=label_to_result,
-        out_directory='out/')
-
-    explanations[0].to_csv('out/separability_concept.csv')
-    explanations[1].to_csv('out/separability_attribute.csv')
-    for class_pair, df in explanations[2].items():
-        df.to_csv(f'out/separability_k_best_{class_pair}.csv')
-    rmtree('tmp/')
+    run_pipeline(args.measurement_study,
+                 args.analysis_study,
+                 args.specimen_study,
+                 args.host,
+                 args.dbname,
+                 args.user,
+                 args.password,
+                 args.val_data_prc,
+                 args.test_data_prc,
+                 args.roi_side_length,
+                 args.target_column,
+                 args.batch_size,
+                 args.epochs,
+                 args.learning_rate,
+                 args.logger,
+                 args.k,
+                 args.explainer,
+                 args.merge_rois,
+                 args.prune_misclassified)
