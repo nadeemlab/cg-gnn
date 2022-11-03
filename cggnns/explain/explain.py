@@ -20,7 +20,8 @@ from .separability import calculate_separability
 from .specimen_importance import save_importances, unify_importance_across
 
 
-def _class_pair_rephrase(class_pair: Tuple[int, int], label_to_result: Dict[int, str]) -> Tuple[str, str]:
+def _class_pair_rephrase(class_pair: Tuple[int, int],
+                         label_to_result: Dict[int, str]) -> Tuple[str, str]:
     'Convert an int class pair to a tuple class pair.'
     return tuple(label_to_result[label] for label in class_pair)
 
@@ -34,7 +35,7 @@ def explain_cell_graphs(cell_graphs_data: List[GraphData],
                         concept_grouping: Optional[Dict[str,
                                                         List[str]]] = None,
                         risk: Optional[ndarray] = None,
-                        patho_prior: Optional[ndarray] = None,
+                        pathological_prior: Optional[ndarray] = None,
                         merge_rois: bool = True,
                         cell_graph_names: Optional[List[str]] = None,
                         label_to_result: Optional[Dict[int, str]] = None,
@@ -43,40 +44,43 @@ def explain_cell_graphs(cell_graphs_data: List[GraphData],
                                    Dict[int, float]]:
     "Generate explanations for all the cell graphs."
 
-    cell_graphs_and_labels = ([d.g for d in cell_graphs_data], [
+    cell_graphs_and_labels = ([d.graph for d in cell_graphs_data], [
                               d.label for d in cell_graphs_data])
     calculate_importance(cell_graphs_and_labels[0], model, explainer_model)
     if (out_directory is not None) and (cell_graph_names is not None):
         graph_groups: Dict[str, List[DGLGraph]] = DefaultDict(list)
-        for g in cell_graphs_data:
+        for graph in cell_graphs_data:
             if merge_rois:
-                graph_groups[g.specimen].append(g.g)
+                graph_groups[graph.specimen].append(graph.graph)
             else:
-                graph_groups[g.name].append(g.g)
+                graph_groups[graph.name].append(graph.graph)
         generate_interactives(graph_groups, feature_names,
                               phenotype_names, out_directory)
 
-    df_sep_by_concept, df_sep_agg, dfs_k_max_dist = calculate_separability(
-        cell_graphs_and_labels, model, feature_names, phenotype_names,
-        prune_misclassified=prune_misclassified, concept_grouping=concept_grouping, risk=risk,
-        patho_prior=patho_prior, out_directory=out_directory)
+    df_seperability_by_concept, df_seperability_aggregated, dfs_k_max_distance = \
+        calculate_separability(cell_graphs_and_labels, model, feature_names, phenotype_names,
+                               prune_misclassified=prune_misclassified,
+                               concept_grouping=concept_grouping, risk=risk,
+                               pathological_prior=pathological_prior, out_directory=out_directory)
 
     if label_to_result is not None:
-        df_sep_by_concept.columns = [_class_pair_rephrase(class_pair, label_to_result)
-                                     for class_pair in df_sep_by_concept.columns.values]
-        df_sep_agg.set_index(Index(
+        df_seperability_by_concept.columns = [
+            _class_pair_rephrase(class_pair, label_to_result) for class_pair in
+            df_seperability_by_concept.columns.values]
+        df_seperability_aggregated.set_index(Index(
             (_class_pair_rephrase(class_pair, label_to_result)
              if isinstance(class_pair, tuple) else class_pair
-             ) for class_pair in df_sep_agg.index.values), inplace=True)
-        dfs_k_max_dist = {_class_pair_rephrase(
-            class_pair, label_to_result): df for class_pair, df in dfs_k_max_dist.items()}
+             ) for class_pair in df_seperability_aggregated.index.values), inplace=True)
+        dfs_k_max_distance = {_class_pair_rephrase(
+            class_pair, label_to_result): df for class_pair, df in dfs_k_max_distance.items()}
 
     cell_graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
-    for cg in cell_graphs_data:
-        cell_graphs_by_specimen[cg.specimen].append(cg.g)
+    for cell_graph_data in cell_graphs_data:
+        cell_graphs_by_specimen[cell_graph_data.specimen].append(
+            cell_graph_data.graph)
     importances = unify_importance_across(
         list(cell_graphs_by_specimen.values()), model)
     if out_directory is not None:
         save_importances(importances, join(out_directory, 'importances.csv'))
 
-    return df_sep_by_concept, df_sep_agg, dfs_k_max_dist, importances
+    return df_seperability_by_concept, df_seperability_aggregated, dfs_k_max_distance, importances

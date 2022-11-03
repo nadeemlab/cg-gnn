@@ -46,9 +46,9 @@ if __name__ == "__main__":
     graph_groups: Dict[str, List[DGLGraph]] = DefaultDict(list)
     for g in cell_graphs_data:
         if args.merge_rois:
-            graph_groups[g.specimen].append(g.g)
+            graph_groups[g.specimen].append(g.graph)
         else:
-            graph_groups[g.name].append(g.g)
+            graph_groups[g.name].append(g.graph)
     columns = read_hdf(args.cell_data_hdf_path).columns.values
     generate_interactives(
         graph_groups,

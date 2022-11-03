@@ -13,42 +13,19 @@ from dgl import batch, DGLGraph
 from dgl.data.utils import load_graphs
 
 from cggnns.util.ml.cell_graph_model import CellGraphModel
+from cggnns.util.constants import (FEATURES, DEFAULT_GNN_PARAMETERS,
+                                   DEFAULT_CLASSIFICATION_PARAMETERS)
 
 
 IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
-COLLATE_FN = {
+COLLATE_USING = {
     'DGLGraph': batch,
     'DGLHeteroGraph': batch,
     'Tensor': lambda x: x,
     'int': lambda x: IntTensor(x).to(DEVICE),
     'int64': lambda x: IntTensor(x).to(DEVICE),
     'float': lambda x: LongTensor(x).to(DEVICE)
-}
-FEATURES = 'feat'
-
-# model parameters
-DEFAULT_GNN_PARAMS = {
-    'layer_type': "pna_layer",
-    'output_dim': 64,
-    'num_layers': 3,
-    'readout_op': "lstm",
-    'readout_type': "mean",
-    'aggregators': "mean max min std",
-    'scalers': "identity amplification attenuation",
-    'avg_d': 4,
-    'dropout': 0.,
-    'graph_norm': True,
-    'batch_norm': True,
-    'towers': 1,
-    'pretrans_layers': 1,
-    'posttrans_layers': 1,
-    'divide_input': False,
-    'residual': False
-}
-DEFAULT_CLASSIFICATION_PARAMS = {
-    'num_layers': 2,
-    'hidden_dim': 128
 }
 
 
@@ -60,38 +37,42 @@ def load_label_to_result(path: str) -> Dict[int, str]:
 
 class GraphData(NamedTuple):
     "Holds all data relevant to a cell graph instance."
-    g: DGLGraph
+    graph: DGLGraph
     label: int
     name: str
     specimen: str
-    train_val_test: Literal['train', 'val', 'test']
+    train_validation_test: Literal['train', 'validation', 'test']
 
 
-def load_cell_graphs(graph_path: str, train: bool = True, val: bool = True, test: bool = True) -> List[GraphData]:
+def load_cell_graphs(graph_path: str,
+                     train: bool = True,
+                     validation: bool = True,
+                     test: bool = True) -> List[GraphData]:
     "Load cell graphs. Must be in graph_path/<set>/<specimen>/<graph>.bin form."
 
-    which_sets: Set[Literal['train', 'val', 'test']] = set()
+    which_sets: Set[Literal['train', 'validation', 'test']] = set()
     if train:
         which_sets.add('train')
-    if val:
-        which_sets.add('val')
+    if validation:
+        which_sets.add('validation')
     if test:
         which_sets.add('test')
 
     graphs: List[GraphData] = []
-    for dir_path, set_names, _ in walk(graph_path):
+    for directory_path, set_names, _ in walk(graph_path):
         for set_name in set_names:
-            if set_name in {'train', 'test', 'val'}:
-                for set_path, specimens, _ in walk(join(dir_path, set_name)):
+            if set_name in {'train', 'test', 'validation'}:
+                for set_path, specimens, _ in walk(join(directory_path, set_name)):
                     for specimen in specimens:
-                        for specimen_path, _, g_names in walk(join(set_path, specimen)):
-                            for g_name in g_names:
-                                assert isinstance(g_name, str)
-                                if g_name.endswith('.bin'):
-                                    g, l = load_graph(
-                                        join(specimen_path, g_name))
+                        for specimen_path, _, graph_names in walk(join(set_path, specimen)):
+                            for graph_name in graph_names:
+                                assert isinstance(graph_name, str)
+                                if graph_name.endswith('.bin'):
+                                    graph, label = load_graph(
+                                        join(specimen_path, graph_name))
                                     graphs.append(
-                                        GraphData(g, l, g_name[:-4], specimen, set_name))
+                                        GraphData(graph, label, graph_name[:-4], specimen,
+                                                  set_name))
     return graphs
 
 
@@ -122,7 +103,7 @@ class CGDataset(Dataset):
 
         self.cell_graphs = cell_graphs
         self.cell_graph_labels = cell_graph_labels
-        self.num_cg = len(self.cell_graphs)
+        self.n_cell_graphs = len(self.cell_graphs)
         self.load_in_ram = load_in_ram
 
     def __getitem__(self, index):
@@ -131,27 +112,28 @@ class CGDataset(Dataset):
         Args:
             index (int): index of the example.
         """
-        cg = self.cell_graphs[index]
+        cell_graph = self.cell_graphs[index]
         if IS_CUDA:
-            cg = cg.to('cuda:0')
-        return cg if (self.cell_graph_labels is None) else (cg, float(self.cell_graph_labels[index]))
+            cell_graph = cell_graph.to('cuda:0')
+        return cell_graph if (self.cell_graph_labels is None) \
+            else (cell_graph, float(self.cell_graph_labels[index]))
 
     def __len__(self):
         """Return the number of samples in the dataset."""
-        return self.num_cg
+        return self.n_cell_graphs
 
 
 def instantiate_model(cell_graphs: Tuple[List[DGLGraph], List[int]],
-                      gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMS,
-                      classification_params: Dict[str,
-                                                  Any] = DEFAULT_CLASSIFICATION_PARAMS,
+                      gnn_parameters: Dict[str, Any] = DEFAULT_GNN_PARAMETERS,
+                      classification_parameters: Dict[str,
+                                                      Any] = DEFAULT_CLASSIFICATION_PARAMETERS,
                       model_checkpoint_path: Optional[str] = None
                       ) -> CellGraphModel:
     "Returns a model set up as specified."
     model = CellGraphModel(
-        gnn_params=gnn_params,
-        classification_params=classification_params,
-        node_dim=cell_graphs[0][0].ndata['feat'].shape[1],
+        gnn_params=gnn_parameters,
+        classification_params=classification_parameters,
+        node_dim=cell_graphs[0][0].ndata[FEATURES].shape[1],
         num_classes=int(max(cell_graphs[1]))+1
     ).to(DEVICE)
     if model_checkpoint_path is not None:
@@ -172,12 +154,12 @@ def collate(example_batch):
     # collate the data
     if isinstance(example_batch[0], tuple):  # graph and label
         def collate_fn(batch, id, type):
-            return COLLATE_FN[type]([example[id] for example in batch])
+            return COLLATE_USING[type]([example[id] for example in batch])
         num_modalities = len(example_batch[0])
         return tuple([collate_fn(example_batch, mod_id, type(example_batch[0][mod_id]).__name__)
                       for mod_id in range(num_modalities)])
     else:  # graph only
-        return tuple([COLLATE_FN[type(example_batch[0]).__name__](example_batch)])
+        return tuple([COLLATE_USING[type(example_batch[0]).__name__](example_batch)])
 
 
 def dynamic_import_from(source_file: str, class_name: str) -> Any:

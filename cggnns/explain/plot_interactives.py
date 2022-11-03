@@ -17,8 +17,10 @@ from bokeh.palettes import YlOrRd8
 from bokeh.layouts import row
 from bokeh.io import output_file, save
 
+from cggnns.util.constants import INDICES, FEATURES, PHENOTYPES, CENTROIDS, IMPORTANCES
 
-def _make_bokeh_graph_plot(g: DiGraph,
+
+def _make_bokeh_graph_plot(graph: DiGraph,
                            feature_names: List[str],
                            phenotype_names: List[str],
                            graph_name: str,
@@ -34,8 +36,8 @@ def _make_bokeh_graph_plot(g: DiGraph,
     f.toolbar.active_scroll = f.select_one(WheelZoomTool)
     mapper = linear_cmap(  # colors nodes according to importance by default
         'importance', palette=YlOrRd8[::-1], low=0, high=1)
-    plot = from_networkx(g, {i_node: dat
-                             for i_node, dat in get_node_attributes(g, 'centroid').items()})
+    plot = from_networkx(graph, {i_node: dat
+                                 for i_node, dat in get_node_attributes(graph, 'centroid').items()})
     plot.node_renderer.glyph = Circle(
         radius='radius', fill_color=mapper, line_width=.1, fill_alpha=.7)
     plot.edge_renderer.glyph = MultiLine(line_alpha=0.2, line_width=.5)
@@ -90,30 +92,32 @@ def _make_bokeh_graph_plot(g: DiGraph,
     save(layout)
 
 
-def _convert_dgl_to_networkx(g: DGLGraph,
+def _convert_dgl_to_networkx(graph: DGLGraph,
                              feature_names: List[str],
                              phenotype_names: List[str]) -> DiGraph:
     "Convert DGL graph to networkx graph for plotting interactive."
 
-    if 'importance' not in g.ndata:
+    if IMPORTANCES not in graph.ndata:
         raise ValueError(
             'importance scores not yet found. Run calculate_importance_scores first.')
 
-    gx = DiGraph()
-    for i_g in range(g.num_nodes()):
-        i_gx = g.ndata['histological_structure'][i_g].detach(
+    graph_networkx = DiGraph()
+    for i_g in range(graph.num_nodes()):
+        i_gx = graph.ndata[INDICES][i_g].detach(
         ).numpy().astype(int).item()
-        gx.add_node(i_gx)
-        feats = g.ndata['feat'][i_g].detach().numpy()
+        graph_networkx.add_node(i_gx)
+        feats = graph.ndata[FEATURES][i_g].detach().numpy()
         for j, feat in enumerate(feature_names):
-            gx.nodes[i_gx][feat] = feats[j]
-        phenotypes = g.ndata['phenotypes'][i_g].detach().numpy()
+            graph_networkx.nodes[i_gx][feat] = feats[j]
+        phenotypes = graph.ndata[PHENOTYPES][i_g].detach().numpy()
         for j, phenotype in enumerate(phenotype_names):
-            gx.nodes[i_gx][phenotype] = phenotypes[j]
-        gx.nodes[i_gx]['importance'] = g.ndata['importance'][i_g].detach().numpy()
-        gx.nodes[i_gx]['radius'] = gx.nodes[i_gx]['importance']*10
-        gx.nodes[i_gx]['centroid'] = g.ndata['centroid'][i_g].detach().numpy()
-    return gx
+            graph_networkx.nodes[i_gx][phenotype] = phenotypes[j]
+        graph_networkx.nodes[i_gx]['importance'] = graph.ndata[IMPORTANCES][i_g].detach(
+        ).numpy()
+        graph_networkx.nodes[i_gx]['radius'] = graph_networkx.nodes[i_gx][IMPORTANCES]*10
+        graph_networkx.nodes[i_gx]['centroid'] = graph.ndata[CENTROIDS][i_g].detach(
+        ).numpy()
+    return graph_networkx
 
 
 def _stich_specimen_graphs(graphs: List[DiGraph]) -> DiGraph:
@@ -123,23 +127,24 @@ def _stich_specimen_graphs(graphs: List[DiGraph]) -> DiGraph:
         raise ValueError("Must have at least one graph to stitch.")
     if len(graphs) == 1:
         return graphs[0]
-    g_stitched = graphs[0]
-    for g in graphs[1:]:
+    graph_stitched = graphs[0]
+    for graph in graphs[1:]:
 
         # Check for node overlaps and find the max importance score
         overlap_importance: Dict[int, float] = {
-            i: max(g_stitched.nodes[i]['importance'], g.nodes[i]['importance'])
-            for i in set(g_stitched.nodes).intersection(g.nodes)
+            i: max(graph_stitched.nodes[i]['importance'],
+                   graph.nodes[i]['importance'])
+            for i in set(graph_stitched.nodes).intersection(graph.nodes)
         }
 
         # Stich the next graph into the collected graph
-        g_stitched = compose(g_stitched, g)
+        graph_stitched = compose(graph_stitched, graph)
 
         # Overwrite the max importance score.
         for i, importance in overlap_importance.items():
-            g_stitched.nodes[i]['importance'] = importance
+            graph_stitched.nodes[i]['importance'] = importance
 
-    return g_stitched
+    return graph_stitched
 
 
 def generate_interactives(graphs_to_plot: Dict[str, List[DGLGraph]],
@@ -151,6 +156,6 @@ def generate_interactives(graphs_to_plot: Dict[str, List[DGLGraph]],
     makedirs(out_directory, exist_ok=True)
     for name, dgl_graphs in tqdm(graphs_to_plot.items()):
         graphs = [_convert_dgl_to_networkx(
-            g, feature_names, phenotype_names) for g in dgl_graphs]
+            graph, feature_names, phenotype_names) for graph in dgl_graphs]
         _make_bokeh_graph_plot(_stich_specimen_graphs(graphs),
                                feature_names, phenotype_names, name, out_directory)

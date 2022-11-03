@@ -22,8 +22,8 @@ from sklearn.metrics import accuracy_score, f1_score, classification_report
 from dgl import DGLGraph
 from tqdm import tqdm
 
-from cggnns.util import (CellGraphModel, CGDataset, collate, instantiate_model,
-                          DEFAULT_GNN_PARAMS, DEFAULT_CLASSIFICATION_PARAMS)
+from cggnns.util import CellGraphModel, CGDataset, collate, instantiate_model
+from cggnns.util.constants import DEFAULT_GNN_PARAMETERS, DEFAULT_CLASSIFICATION_PARAMETERS
 
 # cuda support
 IS_CUDA = is_available()
@@ -55,56 +55,56 @@ def _create_datasets(
                            Tuple[List[DGLGraph], List[int]],
                            Tuple[List[DGLGraph], List[int]]],
     in_ram: bool = True,
-    k: int = 3
+    k_folds: int = 3
 ) -> Tuple[CGDataset, Optional[CGDataset], Optional[CGDataset], Optional[KFold]]:
     "Make the cell and/or tissue graph datasets and the k-fold if necessary."
 
     train_dataset = _create_dataset(
         cell_graph_sets[0][0], cell_graph_sets[0][1], in_ram)
     assert train_dataset is not None
-    val_dataset = _create_dataset(
+    validation_dataset = _create_dataset(
         cell_graph_sets[1][0], cell_graph_sets[1][1], in_ram)
     test_dataset = _create_dataset(
         cell_graph_sets[2][0], cell_graph_sets[2][1], in_ram)
 
-    if (k > 0) and (val_dataset is not None):
-        # stack train and validation dataloaders if both exist and k-fold cross val is activated
-        train_dataset = ConcatDataset((train_dataset, val_dataset))
-        val_dataset = None
-    elif (k == 0) and (val_dataset is None):
-        # set k to 3 if not provided and no validation data is provided
-        k = 3
-    kfold = KFold(n_splits=k, shuffle=True) if k > 0 else None
+    if (k_folds > 0) and (validation_dataset is not None):
+        # stack train and validation datasets if both exist and k-fold cross validation is on
+        train_dataset = ConcatDataset((train_dataset, validation_dataset))
+        validation_dataset = None
+    elif (k_folds == 0) and (validation_dataset is None):
+        # set k_folds to 3 if not provided and no validation data is provided
+        k_folds = 3
+    kfold = KFold(n_splits=k_folds, shuffle=True) if k_folds > 0 else None
 
-    return train_dataset, val_dataset, test_dataset, kfold
+    return train_dataset, validation_dataset, test_dataset, kfold
 
 
 def _create_training_dataloaders(train_ids: Optional[Sequence[int]],
                                  test_ids: Optional[Sequence[int]],
                                  train_dataset: CGDataset,
-                                 val_dataset: Optional[CGDataset],
+                                 validation_dataset: Optional[CGDataset],
                                  batch_size: int
                                  ) -> Tuple[DataLoader, DataLoader]:
     "Determine whether to k-fold and then create dataloaders."
     if (train_ids is None) or (test_ids is None):
-        if val_dataset is None:
-            raise ValueError("val_dataset must exist.")
+        if validation_dataset is None:
+            raise ValueError("validation_dataset must exist.")
         train_dataloader = DataLoader(
             train_dataset,
             batch_size=batch_size,
             shuffle=True,
             collate_fn=collate
         )
-        val_dataloader = DataLoader(
-            val_dataset,
+        validation_dataloader = DataLoader(
+            validation_dataset,
             batch_size=batch_size,
             shuffle=True,
             collate_fn=collate
         )
     else:
-        if val_dataset is not None:
+        if validation_dataset is not None:
             raise ValueError(
-                "val_dataset provided but k-folding of training dataset requested.")
+                "validation_dataset provided but k-folding of training dataset requested.")
         train_subsampler = SubsetRandomSampler(train_ids)
         test_subsampler = SubsetRandomSampler(test_ids)
         train_dataloader = DataLoader(
@@ -113,14 +113,14 @@ def _create_training_dataloaders(train_ids: Optional[Sequence[int]],
             sampler=train_subsampler,
             collate_fn=collate
         )
-        val_dataloader = DataLoader(
+        validation_dataloader = DataLoader(
             train_dataset,
             batch_size=batch_size,
             sampler=test_subsampler,
             collate_fn=collate
         )
 
-    return train_dataloader, val_dataloader
+    return train_dataloader, validation_dataloader
 
 
 def _train_step(model: CellGraphModel,
@@ -158,70 +158,72 @@ def _train_step(model: CellGraphModel,
     return model, step
 
 
-def _val_step(model: CellGraphModel,
-              val_dataloader: DataLoader,
-              loss_fn: Callable,
-              model_path: str,
-              epoch: int,
-              fold: int,
-              step: int,
-              best_val_loss: float,
-              best_val_accuracy: float,
-              best_val_weighted_f1_score: float,
-              logger: str = None
-              ) -> CellGraphModel:
+def _validation_step(model: CellGraphModel,
+                     validation_dataloader: DataLoader,
+                     loss_fn: Callable,
+                     model_path: str,
+                     epoch: int,
+                     fold: int,
+                     step: int,
+                     best_validation_loss: float,
+                     best_validation_accuracy: float,
+                     best_validation_weighted_f1_score: float,
+                     logger: str = None
+                     ) -> CellGraphModel:
     "Run validation step."
 
     model.eval()
-    all_val_logits = []
-    all_val_labels = []
-    for batch in tqdm(val_dataloader, desc=f'Epoch validation {epoch}, fold {fold}', unit='batch'):
+    all_validation_logits = []
+    all_validation_labels = []
+    for batch in tqdm(validation_dataloader, desc=f'Epoch validation {epoch}, fold {fold}',
+                      unit='batch'):
         labels = batch[-1]
         data = batch[:-1]
         with no_grad():
             logits = model(*data)
-        all_val_logits.append(logits)
-        all_val_labels.append(labels)
+        all_validation_logits.append(logits)
+        all_validation_labels.append(labels)
 
-    all_val_logits = cat(all_val_logits).cpu()
-    all_val_preds = argmax(all_val_logits, dim=1)
-    all_val_labels = cat(all_val_labels).cpu()
+    all_validation_logits = cat(all_validation_logits).cpu()
+    all_validation_predictions = argmax(all_validation_logits, dim=1)
+    all_validation_labels = cat(all_validation_labels).cpu()
 
     # compute & store loss + model
     with no_grad():
-        loss = loss_fn(all_val_logits, all_val_labels).item()
+        loss = loss_fn(all_validation_logits, all_validation_labels).item()
     if logger == 'mlflow':
-        log_metric('val_loss', loss, step=step)
-    if loss < best_val_loss:
-        best_val_loss = loss
+        log_metric('validation_loss', loss, step=step)
+    if loss < best_validation_loss:
+        best_validation_loss = loss
         save(model.state_dict(), join(
-            model_path, 'model_best_val_loss.pt'))
+            model_path, 'model_best_validation_loss.pt'))
 
     # compute & store accuracy + model
-    all_val_preds = all_val_preds.detach().numpy()
-    all_val_labels = all_val_labels.detach().numpy()
-    accuracy = accuracy_score(all_val_labels, all_val_preds)
+    all_validation_predictions = all_validation_predictions.detach().numpy()
+    all_validation_labels = all_validation_labels.detach().numpy()
+    accuracy = accuracy_score(all_validation_labels,
+                              all_validation_predictions)
     if logger == 'mlflow':
-        log_metric('val_accuracy', accuracy, step=step)
-    if accuracy > best_val_accuracy:
-        best_val_accuracy = accuracy
+        log_metric('validation_accuracy', accuracy, step=step)
+    if accuracy > best_validation_accuracy:
+        best_validation_accuracy = accuracy
         save(model.state_dict(), join(
-            model_path, 'model_best_val_accuracy.pt'))
+            model_path, 'model_best_validation_accuracy.pt'))
 
     # compute & store weighted f1-score + model
     weighted_f1_score = f1_score(
-        all_val_labels, all_val_preds, average='weighted')
+        all_validation_labels, all_validation_predictions, average='weighted')
     if logger == 'mlflow':
-        log_metric('val_weighted_f1_score',
+        log_metric('validation_weighted_f1_score',
                    weighted_f1_score, step=step)
-    if weighted_f1_score > best_val_weighted_f1_score:
-        best_val_weighted_f1_score = weighted_f1_score
+    if weighted_f1_score > best_validation_weighted_f1_score:
+        best_validation_weighted_f1_score = weighted_f1_score
         save(model.state_dict(), join(
-            model_path, 'model_best_val_weighted_f1_score.pt'))
+            model_path, 'model_best_validation_weighted_f1_score.pt'))
 
-    print(f'Val loss {loss}')
-    print(f'Val weighted F1 score {weighted_f1_score}')
-    print(f'Val accuracy {accuracy}')
+    print(f'Validation loss {loss}')
+    print(f'Validation weighted F1 score {weighted_f1_score}')
+    print(f'Validation accuracy {accuracy}')
 
     return model
 
@@ -245,7 +247,8 @@ def _test_model(model: CellGraphModel,
     max_acc = -1.
     max_acc_model_checkpoint = {}
 
-    for metric in ['best_val_loss', 'best_val_accuracy', 'best_val_weighted_f1_score']:
+    for metric in ['best_validation_loss', 'best_validation_accuracy',
+                   'best_validation_weighted_f1_score']:
 
         print(f'\n*** Start testing w/ {metric} model ***')
 
@@ -324,9 +327,10 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
           epochs: int = 10,
           learning_rate: float = 10e-3,
           batch_size: int = 1,
-          k: int = 0,
-          gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMS,
-          classification_params: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMS
+          k_folds: int = 0,
+          gnn_parameters: Dict[str, Any] = DEFAULT_GNN_PARAMETERS,
+          classification_parameters: Dict[str,
+                                          Any] = DEFAULT_CLASSIFICATION_PARAMETERS
           ) -> CellGraphModel:
     "Train CG-GNN."
 
@@ -335,10 +339,10 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
         log_params({
             'batch_size': batch_size
         })
-        df = json_normalize(dict(gnn_params=gnn_params,
-                                 classification_params=classification_params))
-        rep = {"graph_building.": "", "model_params.": "",
-               "gnn_params.": ""}  # replacement for shorter key names
+        df = json_normalize(dict(gnn_parameters=gnn_parameters,
+                                 classification_parameters=classification_parameters))
+        rep = {"graph_building.": "", "model_parameters.": "",
+               "gnn_parameters.": ""}  # replacement for shorter key names
         for i, j in rep.items():
             df.columns = df.columns.str.replace(i, j)
         flatten_config = df.to_dict(orient='records')[0]
@@ -349,13 +353,13 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
     save_path = _set_save_path(save_path)
 
     # make datasets (train, validation & test)
-    train_dataset, val_dataset, test_dataset, kfold = _create_datasets(
-        cell_graph_sets, in_ram, k)
+    train_dataset, validation_dataset, test_dataset, kfold = _create_datasets(
+        cell_graph_sets, in_ram, k_folds)
 
     # declare model
     model = instantiate_model(cell_graph_sets[0],
-                              gnn_params=gnn_params,
-                              classification_params=classification_params)
+                              gnn_parameters=gnn_parameters,
+                              classification_parameters=classification_parameters)
 
     # build optimizer
     optimizer = Adam(model.parameters(),
@@ -367,9 +371,9 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
 
     # training loop
     step: int = 0
-    best_val_loss: float = 10e5
-    best_val_accuracy: float = 0.
-    best_val_weighted_f1_score: float = 0.
+    best_validation_loss: float = 10e5
+    best_validation_accuracy: float = 0.
+    best_validation_weighted_f1_score: float = 0.
     for epoch in range(epochs):
 
         folds: List[Tuple[Optional[Any], Optional[Any]]] = list(
@@ -378,8 +382,8 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
         for fold, (train_ids, test_ids) in enumerate(folds):
 
             # Determine whether to k-fold and if so how
-            train_dataloader, val_dataloader = _create_training_dataloaders(
-                train_ids, test_ids, train_dataset, val_dataset, batch_size)
+            train_dataloader, validation_dataloader = _create_training_dataloaders(
+                train_ids, test_ids, train_dataset, validation_dataset, batch_size)
 
             # A.) train for 1 epoch
             model = model.to(DEVICE)
@@ -387,8 +391,9 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
                 model, train_dataloader, loss_fn, optimizer, epoch, fold, step, logger)
 
             # B.) validate
-            model = _val_step(model, val_dataloader, loss_fn, save_path, epoch, fold, step,
-                              best_val_loss, best_val_accuracy, best_val_weighted_f1_score, logger)
+            model = _validation_step(model, validation_dataloader, loss_fn, save_path, epoch, fold,
+                                     step, best_validation_loss, best_validation_accuracy,
+                                     best_validation_weighted_f1_score, logger)
 
     # testing loop
     if test_dataset is not None:
@@ -405,7 +410,7 @@ def infer_with_model(model: CellGraphModel,
                      cell_graphs: List[DGLGraph],
                      in_ram: bool = True,
                      batch_size: int = 1,
-                     return_prob: bool = False
+                     return_probability: bool = False
                      ) -> ndarray:
     "Given a model, infer their classes."
 
@@ -423,7 +428,7 @@ def infer_with_model(model: CellGraphModel,
             logits = model(*data)
         all_test_logits.append(logits)
 
-    coalesce_function = softmax if return_prob else argmax
+    coalesce_function = softmax if return_probability else argmax
     return coalesce_function(cat(all_test_logits).cpu(),
                              dim=1).detach().numpy()
 
@@ -432,8 +437,9 @@ def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
           model_checkpoint_path: str,
           in_ram: bool = True,
           batch_size: int = 1,
-          gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMS,
-          classification_params: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMS
+          gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMETERS,
+          classification_params: Dict[str,
+                                      Any] = DEFAULT_CLASSIFICATION_PARAMETERS
           ) -> None:
     """
     Test CG-GNN.
@@ -443,8 +449,8 @@ def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
 
     # declare model and load weights
     model = instantiate_model(cell_graphs,
-                              gnn_params=gnn_params,
-                              classification_params=classification_params,
+                              gnn_parameters=gnn_params,
+                              classification_parameters=classification_params,
                               model_checkpoint_path=model_checkpoint_path)
 
     # print # of parameters

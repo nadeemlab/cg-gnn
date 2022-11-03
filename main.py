@@ -51,7 +51,7 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--val_data_prc',
+        '--validation_data_percent',
         type=int,
         help='Percentage of data to use as validation data. Set to 0 if you want to do k-fold '
         'cross-validation later. (Training percentage is implicit.) Default 15%.',
@@ -59,7 +59,7 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
-        '--test_data_prc',
+        '--test_data_percent',
         type=int,
         help='Percentage of data to use as the test set. (Training percentage is implicit.) '
         'Default 15%.',
@@ -107,7 +107,8 @@ def parse_arguments():
         default='none'
     )
     parser.add_argument(
-        '--k',
+        '-k',
+        '--k_folds',
         type=int,
         help='Folds to use in k-fold cross validation. 0 means don\'t use k-fold cross validation '
         'unless no validation dataset is provided, in which case k defaults to 3.',
@@ -143,15 +144,15 @@ if __name__ == "__main__":
                  args.dbname,
                  args.user,
                  args.password,
-                 args.val_data_prc,
-                 args.test_data_prc,
+                 args.validation_data_percent,
+                 args.test_data_percent,
                  args.roi_side_length,
                  args.target_column,
                  args.batch_size,
                  args.epochs,
                  args.learning_rate,
                  args.logger,
-                 args.k,
+                 args.k_folds,
                  args.explainer,
                  args.merge_rois,
                  args.prune_misclassified)

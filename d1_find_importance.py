@@ -38,13 +38,13 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     cell_graphs_data = load_cell_graphs(args.cg_path)
-    cell_graphs = [d.g for d in cell_graphs_data]
+    cell_graphs = [d.graph for d in cell_graphs_data]
     cell_graph_labels = [d.label for d in cell_graphs_data]
     cell_graphs = calculate_importance(cell_graphs, instantiate_model(
         (cell_graphs, cell_graph_labels), model_checkpoint_path=args.model_checkpoint_path
     ), args.explainer)
     for g, l, tvt, s, n in zip(cell_graphs, cell_graph_labels,
-                               [d.train_val_test for d in cell_graphs_data],
+                               [d.train_validation_test for d in cell_graphs_data],
                                [d.specimen for d in cell_graphs_data],
                                [d.name for d in cell_graphs_data]):
         save_graphs(join(args.cg_path, tvt, s, n + '.bin'),

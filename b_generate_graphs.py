@@ -22,7 +22,7 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--val_data_prc',
+        '--validation_data_percent',
         type=int,
         help='Percentage of data to use as validation data. Set to 0 if you want to do k-fold '
         'cross-validation later. (Training percentage is implicit.) Default 15%.',
@@ -30,7 +30,7 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
-        '--test_data_prc',
+        '--test_data_percent',
         type=int,
         help='Percentage of data to use as the test set. (Training percentage is implicit.) '
         'Default 15%.',
@@ -64,5 +64,5 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     generate_graphs(read_hdf(args.spt_hdf_cell_filename), read_hdf(args.spt_hdf_label_filename),
-                    args.val_data_prc, args.test_data_prc, args.roi_side_length,
+                    args.validation_data_percent, args.test_data_percent, args.roi_side_length,
                     args.target_column, args.save_path)

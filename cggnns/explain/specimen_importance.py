@@ -10,18 +10,19 @@ from numpy import average
 from pandas import Series
 
 from cggnns.util import CellGraphModel
+from cggnns.util.constants import INDICES, IMPORTANCES
 from cggnns.train import infer_with_model
 
 
 def unify_importance(graphs: List[DGLGraph], model: CellGraphModel) -> Dict[int, float]:
     "Merge the importance values for all cells in a single specimen."
-    probs = infer_with_model(model, graphs, return_prob=True)
+    probs = infer_with_model(model, graphs, return_probability=True)
     hs_id_to_importances: Dict[int,
                                List[Tuple[float, float]]] = DefaultDict(list)
-    for g_i, g in enumerate(graphs):
-        for i in range(g.num_nodes()):
-            hs_id_to_importances[g.ndata['histological_structure'][i].item()].append(
-                (g.ndata['importance'][i], max(probs[g_i, ])))
+    for i_graph, graph in enumerate(graphs):
+        for i in range(graph.num_nodes()):
+            hs_id_to_importances[graph.ndata[INDICES][i].item()].append(
+                (graph.ndata[IMPORTANCES][i], max(probs[i_graph, ])))
     hs_id_to_importance: Dict[int, float] = {}
     for hs_id, importance_confidences in hs_id_to_importances.items():
         hs_id_to_importance[hs_id] = average([ic[0] for ic in importance_confidences],

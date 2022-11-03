@@ -40,10 +40,10 @@ if __name__ == "__main__":
     cell_graphs_data = load_cell_graphs(args.cg_path)
     cell_graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
     for cg in cell_graphs_data:
-        cell_graphs_by_specimen[cg.specimen].append(cg.g)
+        cell_graphs_by_specimen[cg.specimen].append(cg.graph)
     hs_id_to_importance = unify_importance_across(
         list(cell_graphs_by_specimen.values()),
-        instantiate_model(([d.g for d in cell_graphs_data], [d.label for d in cell_graphs_data]),
+        instantiate_model(([d.graph for d in cell_graphs_data], [d.label for d in cell_graphs_data]),
                           model_checkpoint_path=args.model_checkpoint_path))
     if args.out_directory is not None:
         save_importances(hs_id_to_importance, join(

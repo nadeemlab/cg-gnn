@@ -66,7 +66,8 @@ def parse_arguments():
         default='none'
     )
     parser.add_argument(
-        '--k',
+        '-k',
+        '--k_folds',
         type=int,
         help='Folds to use in k-fold cross validation. 0 means don\'t use k-fold cross validation '
         'unless no validation dataset is provided, in which case k defaults to 3.',
@@ -87,11 +88,11 @@ if __name__ == "__main__":
 
     for gd in graphs:
         which_set: Tuple[List[DGLGraph], List[int]] = cg_train
-        if gd.train_val_test == 'val':
+        if gd.train_validation_test == 'validation':
             which_set = cg_val
-        elif gd.train_val_test == 'test':
+        elif gd.train_validation_test == 'test':
             which_set = cg_test
-        which_set[0].append(gd.g)
+        which_set[0].append(gd.graph)
         which_set[1].append(gd.label)
 
     train((cg_train, cg_val, cg_test),
@@ -101,4 +102,4 @@ if __name__ == "__main__":
           args.epochs,
           args.learning_rate,
           args.batch_size,
-          args.k)
+          args.k_folds)

@@ -25,12 +25,12 @@ from pandas import DataFrame
 from matplotlib.pyplot import plot, title, savefig, legend, clf
 
 from cggnns.util import CellGraphModel
+from cggnns.util.constants import FEATURES, PHENOTYPES, IMPORTANCES
 from cggnns.train import infer_with_model
 
 
 IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
-CONCEPTS = "phenotypes"
 
 
 class AttributeSeparability:
@@ -301,7 +301,7 @@ class SeparabilityAggregator:
 
     def compute_correlation_separability_score(self,
                                                risk: ndarray,
-                                               patho_prior: ndarray
+                                               pathological_prior: ndarray
                                                ) -> Dict[Union[Tuple[int, int], str], float]:
         """
         Compute correlation separability score between the prior
@@ -317,7 +317,7 @@ class SeparabilityAggregator:
         corrs: Dict[Union[Tuple[int, int], str], float] = {}
         for i_class_pair in range(sep_scores.shape[1]):
             corr_sep_score = corrcoef(
-                patho_prior[:, i_class_pair], sep_scores[:, i_class_pair])
+                pathological_prior[:, i_class_pair], sep_scores[:, i_class_pair])
             corrs[class_pairs[i_class_pair]] = corr_sep_score[1, 0]
         corrs['agg_with_risk'] = sum(
             array([val for _, val in corrs.items()]) *
@@ -363,18 +363,18 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
                            concept_grouping: Optional[Dict[str,
                                                            List[str]]] = None,
                            risk: Optional[ndarray] = None,
-                           patho_prior: Optional[ndarray] = None,
+                           pathological_prior: Optional[ndarray] = None,
                            out_directory: Optional[str] = None
                            ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame]]:
     "Generate separability scores for each concept."
 
     # Get the importance scores, labels, features, and phenotypes from all cell graphs
-    importance_scores = [g.ndata['importance']
-                         for g in cell_graphs_and_labels[0]]
+    importance_scores = [graph.ndata[IMPORTANCES]
+                         for graph in cell_graphs_and_labels[0]]
     labels = cell_graphs_and_labels[1]
-    attributes = [concatenate((f, g), axis=1) for f, g in zip(
-        [g.ndata['feat'] for g in cell_graphs_and_labels[0]],
-        [g.ndata['phenotypes'] for g in cell_graphs_and_labels[0]]
+    attributes = [concatenate((features, phenotypes), axis=1) for features, phenotypes in zip(
+        [graph.ndata[FEATURES] for graph in cell_graphs_and_labels[0]],
+        [graph.ndata[PHENOTYPES] for graph in cell_graphs_and_labels[0]]
     )]
     attribute_names = feature_names + phenotype_names
 
@@ -430,9 +430,9 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
         'average': metric_analyser.compute_average_separability_score(risk),
         'maximum': metric_analyser.compute_max_separability_score(risk)
     })
-    if patho_prior is not None:
+    if pathological_prior is not None:
         df_aggregated['correlation'] = metric_analyser.compute_correlation_separability_score(
-            risk, patho_prior)
+            risk, pathological_prior)
     if all(risk == risk[0]):
         df_aggregated.drop('agg_with_risk', axis=0, inplace=True)
 

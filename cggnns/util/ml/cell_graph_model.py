@@ -3,11 +3,10 @@ from typing import Tuple, Union
 from dgl import DGLGraph
 from torch import FloatTensor
 
+from ..ml.layers.constants import GNN_NODE_FEAT_IN
 from .layers.mlp import MLP
 from .base_model import BaseModel
 from .layers.multi_layer_gnn import MultiLayerGNN
-
-GNN_NODE_FEAT_IN = 'feat'
 
 
 class CellGraphModel(BaseModel):

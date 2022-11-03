@@ -64,7 +64,7 @@ def parse_arguments():
 if __name__ == "__main__":
     args = parse_arguments()
     cell_graphs_data = load_cell_graphs(args.cg_path)
-    cell_graphs = [d.g for d in cell_graphs_data]
+    cell_graphs = [d.graph for d in cell_graphs_data]
     cell_graph_combo = (cell_graphs, [d.label for d in cell_graphs_data])
     columns = read_hdf(args.cell_data_hdf_path).columns.values
     df_concept, df_aggregated, dfs_k_dist, importances = explain_cell_graphs(

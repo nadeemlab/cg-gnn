@@ -16,10 +16,10 @@ from numpy import ndarray
 from cggnns.util import CellGraphModel
 from cggnns.util.interpretability import (BaseExplainer, GraphLRPExplainer, GraphGradCAMExplainer,
                                           GraphGradCAMPPExplainer, GraphPruningExplainer)
+from cggnns.util.constants import IMPORTANCES
 
 IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
-CONCEPTS = "phenotypes"
 
 
 def calculate_importance(cell_graphs: List[DGLGraph],
@@ -51,9 +51,9 @@ def calculate_importance(cell_graphs: List[DGLGraph],
     model = model.train()
 
     # Calculate the importance scores for every graph
-    for g in tqdm(cell_graphs):
-        importance_scores, _ = explainer.process(g.to(DEVICE))
+    for graph in tqdm(cell_graphs):
+        importance_scores, _ = explainer.process(graph.to(DEVICE))
         assert isinstance(importance_scores, ndarray)
-        g.ndata['importance'] = FloatTensor(importance_scores)
+        graph.ndata[IMPORTANCES] = FloatTensor(importance_scores)
 
     return cell_graphs
