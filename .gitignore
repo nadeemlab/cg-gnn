@@ -11,10 +11,11 @@
 
 # Models and folders
 mlruns/
-models/*
+models/
 output/
 tmp/
 out/
+data/
 
 # Misc.
 .trash/
