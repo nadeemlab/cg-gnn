@@ -8,7 +8,14 @@ This library is a heavily modified version of [histocartography](https://github.
 
 ### Using pip
 
-PyPI installation coming soon.
+In addition to installing via pip,
+```
+pip install cg-gnns
+```
+you must also install using the instructions on their websites,
+* [pytorch](https://pytorch.org/get-started/locally/)
+* [DGL](https://www.dgl.ai/pages/start.html)
+* [CUDA](https://anaconda.org/nvidia/cudatoolkit) (optional but highly recommended if your machine supports it)
 
 ### From source
 

@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "cg-gnns"
+version = "0.1.0"
+description = "Create cell graphs from pathology slide data and train a graph neural network to predict patient outcomes for SPT."
+license = "AGPL-3.0-or-later"
+authors = ["Carlin Liao <liaoc2@mskcc.org>"]
+readme = "README.md"
+repository = "https://github.com/CarlinLiao/cg-gnns"
+keywords = ["gnn", "pathology"]
+packages = [{include = "cggnns"}]
+
+[tool.poetry.dependencies]
+bokeh = "*"
+h5py = "*"
+matplotlib = "*"
+mlflow = "*"
+networkx = "*"
+numpy = "*"
+pandas = "*"
+psycopg2-binary = "*"
+pyshp = "*"
+tables = "*"
+python = "~3.9"
+scikit-learn = "*"
+scipy = "*"
+tqdm = "*"
+
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+autopep8 = "*"
+mypy = "*"
+pycodestyle = "*"
+dgl-cu116 = {url = "https://data.dgl.ai/wheels/dgl_cu116-0.9.1-cp39-cp39-manylinux1_x86_64.whl"}
+torch = {url = "https://download.pytorch.org/whl/cu116/torch-1.12.1%2Bcu116-cp39-cp39-linux_x86_64.whl"}

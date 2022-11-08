@@ -1,3 +1,5 @@
+poetry.lock
+
 # Data
 *.h5
 *.png
