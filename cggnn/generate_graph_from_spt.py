@@ -13,8 +13,8 @@ from sklearn.neighbors import kneighbors_graph
 from pandas import DataFrame
 from scipy.spatial.distance import pdist, squareform
 
-from cggnns.util import GraphData
-from cggnns.util.constants import CENTROIDS, FEATURES, INDICES, PHENOTYPES, TRAIN_VALIDATION_TEST
+from cggnn.util import GraphData
+from cggnn.util.constants import CENTROIDS, FEATURES, INDICES, PHENOTYPES, TRAIN_VALIDATION_TEST
 
 
 def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,

@@ -12,7 +12,7 @@ from numpy import sort
 from pandas import DataFrame, Series, read_sql, read_hdf
 from shapefile import Reader
 
-from cggnns.util import load_label_to_result
+from cggnn.util import load_label_to_result
 
 
 def _get_targets(conn, measurement_study: str) -> DataFrame:

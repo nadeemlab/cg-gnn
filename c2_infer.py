@@ -5,8 +5,8 @@ Script for testing CG-GNN, TG-GNN and HACT models
 
 from argparse import ArgumentParser
 
-from cggnns.train import infer
-from cggnns.util import load_cell_graphs
+from cggnn.train import infer
+from cggnn.util import load_cell_graphs
 
 
 def parse_arguments():

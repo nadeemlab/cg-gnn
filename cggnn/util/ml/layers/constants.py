@@ -3,7 +3,7 @@ from torch.nn import ReLU, Tanh, Sigmoid, ELU, LeakyReLU, PReLU
 import dgl
 import numpy as np
 
-from cggnns.util.constants import FEATURES
+from cggnn.util.constants import FEATURES
 
 
 ACTIVATIONS = {
@@ -32,7 +32,7 @@ AVAILABLE_LAYER_TYPES = {
 }
 
 
-GNN_MODULE = 'cggnns.util.ml.layers.{}'
+GNN_MODULE = 'cggnn.util.ml.layers.{}'
 
 
 def min_nodes(graph, features):

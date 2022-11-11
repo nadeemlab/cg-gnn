@@ -16,7 +16,7 @@ from ..util import torch_to_numpy
 
 
 DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-MODEL_MODULE = 'cggnns.util.ml'
+MODEL_MODULE = 'cggnn.util.ml'
 
 
 class GraphPruningExplainer(BaseExplainer):

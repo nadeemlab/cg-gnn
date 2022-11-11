@@ -17,7 +17,7 @@ from bokeh.palettes import YlOrRd8
 from bokeh.layouts import row
 from bokeh.io import output_file, save
 
-from cggnns.util.constants import INDICES, FEATURES, PHENOTYPES, CENTROIDS, IMPORTANCES
+from cggnn.util.constants import INDICES, FEATURES, PHENOTYPES, CENTROIDS, IMPORTANCES
 
 
 def _make_bokeh_graph_plot(graph: DiGraph,

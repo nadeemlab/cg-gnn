@@ -24,9 +24,9 @@ from scipy.ndimage.filters import uniform_filter1d
 from pandas import DataFrame
 from matplotlib.pyplot import plot, title, savefig, legend, clf
 
-from cggnns.util import CellGraphModel
-from cggnns.util.constants import FEATURES, PHENOTYPES, IMPORTANCES
-from cggnns.train import infer_with_model
+from cggnn.util import CellGraphModel
+from cggnn.util.constants import FEATURES, PHENOTYPES, IMPORTANCES
+from cggnn.train import infer_with_model
 
 
 IS_CUDA = is_available()

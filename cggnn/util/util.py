@@ -12,9 +12,9 @@ from torch.utils.data import Dataset
 from dgl import batch, DGLGraph
 from dgl.data.utils import load_graphs
 
-from cggnns.util.ml.cell_graph_model import CellGraphModel
-from cggnns.util.constants import (FEATURES, DEFAULT_GNN_PARAMETERS,
-                                   DEFAULT_CLASSIFICATION_PARAMETERS)
+from cggnn.util.ml.cell_graph_model import CellGraphModel
+from cggnn.util.constants import (FEATURES, DEFAULT_GNN_PARAMETERS,
+                                  DEFAULT_CLASSIFICATION_PARAMETERS)
 
 
 IS_CUDA = is_available()

@@ -3,7 +3,7 @@ from argparse import ArgumentParser
 
 from pandas import read_hdf
 
-from cggnns.generate_graph_from_spt import generate_graphs
+from cggnn.generate_graph_from_spt import generate_graphs
 
 
 def parse_arguments():

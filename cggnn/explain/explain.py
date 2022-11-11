@@ -12,8 +12,8 @@ from dgl import DGLGraph
 from numpy import ndarray
 from pandas import DataFrame, Index
 
-from cggnns.util import CellGraphModel
-from cggnns.util.util import GraphData
+from cggnn.util import CellGraphModel
+from cggnn.util.util import GraphData
 from .importance import calculate_importance
 from .plot_interactives import generate_interactives
 from .separability import calculate_separability

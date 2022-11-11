@@ -22,8 +22,8 @@ from sklearn.metrics import accuracy_score, f1_score, classification_report
 from dgl import DGLGraph
 from tqdm import tqdm
 
-from cggnns.util import CellGraphModel, CGDataset, collate, instantiate_model
-from cggnns.util.constants import DEFAULT_GNN_PARAMETERS, DEFAULT_CLASSIFICATION_PARAMETERS
+from cggnn.util import CellGraphModel, CGDataset, collate, instantiate_model
+from cggnn.util.constants import DEFAULT_GNN_PARAMETERS, DEFAULT_CLASSIFICATION_PARAMETERS
 
 # cuda support
 IS_CUDA = is_available()

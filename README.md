@@ -1,6 +1,6 @@
-# `cg-gnns`
+# `cg-gnn`
 
-`cg-gnns` (short for "Cell Graph - Graph Neural Networks'') is a library to create cell graphs from pathology slide data and train a graph neural network model using them to predict patient outcomes. This library is designed to be used with and as part of the [SPT framework](https://github.com/nadeemlab/SPT), although independent functionality is also possible provided you can provide formatted, cell level slide data.
+`cg-gnn` (short for "Cell Graph - Graph Neural Networks'') is a library to create cell graphs from pathology slide data and train a graph neural network model using them to predict patient outcomes. This library is designed to be used with and as part of the [SPT framework](https://github.com/nadeemlab/SPT), although independent functionality is also possible provided you can provide formatted, cell level slide data.
 
 This library is a heavily modified version of [histocartography](https://github.com/BiomedSciAI/histocartography) and two of its applications, [hact-net](https://github.com/histocartography/hact-net) and [patho-quant-explainer](https://github.com/histocartography/patho-quant-explainer).
 
@@ -10,7 +10,7 @@ This library is a heavily modified version of [histocartography](https://github.
 
 In addition to installing via pip,
 ```
-pip install cg-gnns
+pip install cg-gnn
 ```
 you must also install using the instructions on their websites,
 * [pytorch](https://pytorch.org/get-started/locally/)

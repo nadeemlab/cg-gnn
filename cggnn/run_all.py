@@ -6,11 +6,11 @@ from typing import Tuple, List, Literal, Optional
 
 from dgl import DGLGraph
 
-from cggnns.util.constants import TRAIN_VALIDATION_TEST
-from cggnns.spt_to_df import spt_to_dataframes
-from cggnns.generate_graph_from_spt import generate_graphs
-from cggnns.train import train
-from cggnns.explain import explain_cell_graphs
+from cggnn.util.constants import TRAIN_VALIDATION_TEST
+from cggnn.spt_to_df import spt_to_dataframes
+from cggnn.generate_graph_from_spt import generate_graphs
+from cggnn.train import train
+from cggnn.explain import explain_cell_graphs
 
 
 def run_pipeline(measurement_study: str,

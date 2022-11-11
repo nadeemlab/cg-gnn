@@ -1,13 +1,13 @@
 [tool.poetry]
-name = "cg-gnns"
+name = "cg-gnn"
 version = "0.1.0"
 description = "Create cell graphs from pathology slide data and train a graph neural network to predict patient outcomes for SPT."
 license = "AGPL-3.0-or-later"
 authors = ["Carlin Liao <liaoc2@mskcc.org>"]
 readme = "README.md"
-repository = "https://github.com/CarlinLiao/cg-gnns"
+repository = "https://github.com/CarlinLiao/cg-gnn"
 keywords = ["gnn", "pathology"]
-packages = [{include = "cggnns"}]
+packages = [{include = "cggnn"}]
 
 [tool.poetry.dependencies]
 bokeh = "*"

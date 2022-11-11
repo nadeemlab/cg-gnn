@@ -1,11 +1,9 @@
 """
 Query SPT PSQL database for cell-level features and slide-level labels and save to two CSV files.
-
-Note: use with the melanoma_psql conda env and not the cggnns_hpc env.
 """
 from argparse import ArgumentParser
 
-from cggnns.spt_to_df import spt_to_dataframes
+from cggnn.spt_to_df import spt_to_dataframes
 
 
 def parse_arguments():

@@ -257,7 +257,7 @@ class PipelineRunner:
             )
             name, config = list(stage.items())[0]
             stage_class = dynamic_import_from(
-                f"cggnns.{name}", config.pop("class")
+                f"cggnn.{name}", config.pop("class")
             )
             pipeline_stage = partial(
                 stage_class,

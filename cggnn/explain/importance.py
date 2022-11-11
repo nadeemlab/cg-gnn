@@ -13,10 +13,10 @@ from torch.cuda import is_available
 from dgl import DGLGraph
 from numpy import ndarray
 
-from cggnns.util import CellGraphModel
-from cggnns.util.interpretability import (BaseExplainer, GraphLRPExplainer, GraphGradCAMExplainer,
-                                          GraphGradCAMPPExplainer, GraphPruningExplainer)
-from cggnns.util.constants import IMPORTANCES
+from cggnn.util import CellGraphModel
+from cggnn.util.interpretability import (BaseExplainer, GraphLRPExplainer, GraphGradCAMExplainer,
+                                         GraphGradCAMPPExplainer, GraphPruningExplainer)
+from cggnn.util.constants import IMPORTANCES
 
 IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'

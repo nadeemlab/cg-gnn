@@ -6,8 +6,8 @@ from argparse import ArgumentParser
 from torch import FloatTensor
 from dgl import save_graphs
 
-from cggnns.explain import calculate_importance
-from cggnns.util import load_cell_graphs, instantiate_model
+from cggnn.explain import calculate_importance
+from cggnn.util import load_cell_graphs, instantiate_model
 
 
 def parse_arguments():

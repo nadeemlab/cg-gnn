@@ -9,9 +9,9 @@ from dgl import DGLGraph
 from numpy import average
 from pandas import Series
 
-from cggnns.util import CellGraphModel
-from cggnns.util.constants import INDICES, IMPORTANCES
-from cggnns.train import infer_with_model
+from cggnn.util import CellGraphModel
+from cggnn.util.constants import INDICES, IMPORTANCES
+from cggnn.train import infer_with_model
 
 
 def unify_importance(graphs: List[DGLGraph], model: CellGraphModel) -> Dict[int, float]:
