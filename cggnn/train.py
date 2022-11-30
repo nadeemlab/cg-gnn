@@ -8,9 +8,6 @@ from shutil import rmtree
 from typing import Callable, List, Tuple, Optional, Any, Sequence, Dict
 
 from numpy import ndarray, array
-from pandas.io.json import json_normalize
-from mlflow import log_params, log_metric, log_artifact
-from mlflow.pytorch import log_model
 from torch import save, load, no_grad, argmax, cat
 from torch.cuda import is_available
 from torch.optim import Adam, Optimizer
@@ -129,8 +126,7 @@ def _train_step(model: CellGraphModel,
                 optimizer: Optimizer,
                 epoch: int,
                 fold: int,
-                step: int,
-                logger: str = None
+                step: int
                 ) -> Tuple[CellGraphModel, int]:
     "Train for 1 epoch/fold."
 
@@ -148,10 +144,6 @@ def _train_step(model: CellGraphModel,
         loss.backward()
         optimizer.step()
 
-        # 3. log training loss
-        if logger == 'mlflow':
-            log_metric('train_loss', loss.item(), step=step)
-
         # 4. increment step
         step += 1
 
@@ -167,8 +159,7 @@ def _validation_step(model: CellGraphModel,
                      step: int,
                      best_validation_loss: float,
                      best_validation_accuracy: float,
-                     best_validation_weighted_f1_score: float,
-                     logger: str = None
+                     best_validation_weighted_f1_score: float
                      ) -> CellGraphModel:
     "Run validation step."
 
@@ -191,8 +182,6 @@ def _validation_step(model: CellGraphModel,
     # compute & store loss + model
     with no_grad():
         loss = loss_fn(all_validation_logits, all_validation_labels).item()
-    if logger == 'mlflow':
-        log_metric('validation_loss', loss, step=step)
     if loss < best_validation_loss:
         best_validation_loss = loss
         save(model.state_dict(), join(
@@ -203,8 +192,6 @@ def _validation_step(model: CellGraphModel,
     all_validation_labels = all_validation_labels.detach().numpy()
     accuracy = accuracy_score(all_validation_labels,
                               all_validation_predictions)
-    if logger == 'mlflow':
-        log_metric('validation_accuracy', accuracy, step=step)
     if accuracy > best_validation_accuracy:
         best_validation_accuracy = accuracy
         save(model.state_dict(), join(
@@ -213,9 +200,6 @@ def _validation_step(model: CellGraphModel,
     # compute & store weighted f1-score + model
     weighted_f1_score = f1_score(
         all_validation_labels, all_validation_predictions, average='weighted')
-    if logger == 'mlflow':
-        log_metric('validation_weighted_f1_score',
-                   weighted_f1_score, step=step)
     if weighted_f1_score > best_validation_weighted_f1_score:
         best_validation_weighted_f1_score = weighted_f1_score
         save(model.state_dict(), join(
@@ -233,8 +217,7 @@ def _test_model(model: CellGraphModel,
                 batch_size: int,
                 loss_fn: Callable,
                 model_path: str,
-                step: int,
-                logger: Optional[str] = None
+                step: int
                 ) -> CellGraphModel:
     model.eval()
     test_dataloader = DataLoader(
@@ -274,16 +257,11 @@ def _test_model(model: CellGraphModel,
         # compute & store loss
         with no_grad():
             loss = loss_fn(all_test_logits, all_test_labels).item()
-        if logger == 'mlflow':
-            log_metric('best_test_loss_' + metric, loss)
 
         # compute & store accuracy
         all_test_preds = all_test_preds.detach().numpy()
         all_test_labels = all_test_labels.detach().numpy()
         accuracy = accuracy_score(all_test_labels, all_test_preds)
-        if logger == 'mlflow':
-            log_metric('best_test_accuracy_' +
-                       metric, accuracy, step=step)
         if accuracy > max_acc:
             max_acc = accuracy
             max_acc_model_checkpoint = checkpoint
@@ -291,9 +269,6 @@ def _test_model(model: CellGraphModel,
         # compute & store weighted f1-score
         weighted_f1_score = f1_score(
             all_test_labels, all_test_preds, average='weighted')
-        if logger == 'mlflow':
-            log_metric('best_test_weighted_f1_score_' +
-                       metric, weighted_f1_score, step=step)
 
         # compute and store classification report
         report = classification_report(
@@ -301,14 +276,6 @@ def _test_model(model: CellGraphModel,
         out_path = join(model_path, 'classification_report.txt')
         with open(out_path, "w", encoding='utf-8') as f:
             f.write(report)
-
-        if logger == 'mlflow':
-            artifact_path = f'evaluators/class_report_{metric}'
-            log_artifact(out_path, artifact_path=artifact_path)
-
-        # log MLflow models
-        if logger == 'mlflow':
-            log_model(model, 'model_' + metric)
 
         print(f'Test loss {loss}')
         print(f'Test weighted F1 score {weighted_f1_score}')
@@ -322,7 +289,6 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
                                  Tuple[List[DGLGraph], List[int]],
                                  Tuple[List[DGLGraph], List[int]]],
           save_path: str,
-          logger: Optional[str] = None,
           in_ram: bool = True,
           epochs: int = 10,
           learning_rate: float = 10e-3,
@@ -333,21 +299,6 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
                                           Any] = DEFAULT_CLASSIFICATION_PARAMETERS
           ) -> CellGraphModel:
     "Train CG-GNN."
-
-    # log parameters to logger
-    if logger == 'mlflow':
-        log_params({
-            'batch_size': batch_size
-        })
-        df = json_normalize(dict(gnn_parameters=gnn_parameters,
-                                 classification_parameters=classification_parameters))
-        rep = {"graph_building.": "", "model_parameters.": "",
-               "gnn_parameters.": ""}  # replacement for shorter key names
-        for i, j in rep.items():
-            df.columns = df.columns.str.replace(i, j)
-        flatten_config = df.to_dict(orient='records')[0]
-        for key, val in flatten_config.items():
-            log_params({key: str(val)})
 
     # set path to save checkpoints
     save_path = _set_save_path(save_path)
@@ -388,20 +339,17 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
             # A.) train for 1 epoch
             model = model.to(DEVICE)
             model, step = _train_step(
-                model, train_dataloader, loss_fn, optimizer, epoch, fold, step, logger)
+                model, train_dataloader, loss_fn, optimizer, epoch, fold, step)
 
             # B.) validate
             model = _validation_step(model, validation_dataloader, loss_fn, save_path, epoch, fold,
                                      step, best_validation_loss, best_validation_accuracy,
-                                     best_validation_weighted_f1_score, logger)
+                                     best_validation_weighted_f1_score)
 
     # testing loop
     if test_dataset is not None:
         model = _test_model(model, test_dataset, batch_size,
-                            loss_fn, save_path, step, logger)
-
-    if logger == 'mlflow':
-        rmtree(save_path)
+                            loss_fn, save_path, step)
 
     return model
 

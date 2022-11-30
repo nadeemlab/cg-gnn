@@ -27,7 +27,6 @@ def run_pipeline(measurement_study: str,
                  batch_size: int = 1,
                  epochs: int = 10,
                  learning_rate: float = 10e-3,
-                 logger: str = 'none',
                  k_folds: int = 0,
                  explainer: str = 'pp',
                  merge_rois: bool = True,
@@ -51,7 +50,7 @@ def run_pipeline(measurement_study: str,
             s = 2
         train_validation_test[s][0].append(gd.graph)
         train_validation_test[s][1].append(gd.label)
-    model = train(train_validation_test, 'tmp/', logger=logger, epochs=epochs,
+    model = train(train_validation_test, 'tmp/', epochs=epochs,
                   learning_rate=learning_rate, batch_size=batch_size, k_folds=k_folds)
 
     columns = df_cell.columns.values

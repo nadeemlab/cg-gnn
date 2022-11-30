@@ -59,13 +59,6 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
-        '--logger',
-        type=str,
-        help='Logger type. Options are "mlflow" or "none"',
-        required=False,
-        default='none'
-    )
-    parser.add_argument(
         '-k',
         '--k_folds',
         type=int,
@@ -97,7 +90,6 @@ if __name__ == "__main__":
 
     train((cg_train, cg_val, cg_test),
           args.model_save_path,
-          args.logger,
           args.in_ram,
           args.epochs,
           args.learning_rate,

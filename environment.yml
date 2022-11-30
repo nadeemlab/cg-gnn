@@ -6,7 +6,6 @@ dependencies:
   - dglteam::dgl-cuda11.6
   - h5py
   - matplotlib
-  - conda-forge::mlflow
   - networkx
   - numpy
   - nvidia::cudatoolkit=11.6
