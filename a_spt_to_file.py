@@ -10,21 +10,9 @@ def parse_arguments():
     "Process command line arguments."
     parser = ArgumentParser()
     parser.add_argument(
-        '--measurement_study',
+        '--study',
         type=str,
-        help='Name of the measurement study table in SPT.',
-        required=True
-    )
-    parser.add_argument(
-        '--analysis_study',
-        type=str,
-        help='Name of the analysis study table in SPT.',
-        required=True
-    )
-    parser.add_argument(
-        '--specimen_study',
-        type=str,
-        help='Name of the specimen study table in SPT.',
+        help='Name of the study in SPT.',
         required=True
     )
     parser.add_argument(
@@ -62,5 +50,5 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    spt_to_dataframes(args.analysis_study, args.measurement_study, args.specimen_study, args.host,
-                      args.dbname, args.user, args.password, args.output_name)
+    spt_to_dataframes(args.study, args.host, args.dbname,
+                      args.user, args.password, args.output_name)

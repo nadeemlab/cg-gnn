@@ -188,9 +188,7 @@ def _create_label_df(conn, specimen_study: str) -> Tuple[DataFrame, Dict[int, st
     return df.replace({res: i for i, res in label_to_result.items()}), label_to_result
 
 
-def spt_to_dataframes(analysis_study: str,
-                      measurement_study: str,
-                      specimen_study: str,
+def spt_to_dataframes(study: str,
                       host: str,
                       dbname: str,
                       user: str,
@@ -205,6 +203,9 @@ def spt_to_dataframes(analysis_study: str,
         if exists(label_filename) and exists(cells_filename) and exists(dict_filename):
             return (read_hdf(cells_filename), read_hdf(label_filename),
                     load_label_to_result(dict_filename))
+    analysis_study: str = study + ' - data analysis'
+    measurement_study: str = study + ' - measurement'
+    specimen_study: str = study + ' - specimen collection'
     conn = connect(host=host, dbname=dbname,
                    user=user, password=password)
     df_label, label_to_result = _create_label_df(conn, specimen_study)
