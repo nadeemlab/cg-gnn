@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cg-gnn"
-version = "0.1.2"
+version = "0.1.3"
 description = "Create cell graphs from pathology slide data and train a graph neural network to predict patient outcomes for SPT."
 license = "AGPL-3.0-or-later"
 authors = ["Carlin Liao <liaoc2@mskcc.org>"]

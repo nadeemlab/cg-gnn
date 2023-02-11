@@ -13,9 +13,7 @@ from cggnn.train import train
 from cggnn.explain import explain_cell_graphs
 
 
-def run_pipeline(measurement_study: str,
-                 analysis_study: str,
-                 specimen_study: str,
+def run_pipeline(study: str,
                  host: str,
                  dbname: str,
                  user: str,
@@ -34,10 +32,9 @@ def run_pipeline(measurement_study: str,
     "Run the full SPT CG-GNN pipeline."
     makedirs('tmp/', exist_ok=True)
     df_cell, df_label, label_to_result = spt_to_dataframes(
-        analysis_study, measurement_study, specimen_study, host, dbname,
-        user, password)
-    graphs = generate_graphs(df_cell, df_label, validation_data_percent, test_data_percent,
-                             roi_side_length, target_column)
+        study, host, dbname, user, password)
+    graphs = generate_graphs(df_cell, df_label, validation_data_percent,
+                             test_data_percent, roi_side_length, target_column)
 
     train_validation_test: Tuple[Tuple[List[DGLGraph], List[int]],
                                  Tuple[List[DGLGraph], List[int]],
