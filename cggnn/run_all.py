@@ -1,9 +1,10 @@
-"Run through the entire SPT CG-GNN pipeline."
+"""Run through the entire SPT CG-GNN pipeline."""
 
 from os import makedirs
 from shutil import rmtree
-from typing import Tuple, List, Literal, Optional
+from typing import Dict, Tuple, List, Literal, Optional
 
+from pandas import DataFrame
 from dgl import DGLGraph
 
 from cggnn.util.constants import TRAIN_VALIDATION_TEST
@@ -13,11 +14,9 @@ from cggnn.train import train
 from cggnn.explain import explain_cell_graphs
 
 
-def run_pipeline(study: str,
-                 host: str,
-                 dbname: str,
-                 user: str,
-                 password: str,
+def run_with_dfs(df_cell: DataFrame,
+                 df_label: DataFrame,
+                 label_to_result: Dict[int, str],
                  validation_data_percent: int = 15,
                  test_data_percent: int = 15,
                  roi_side_length: int = 600,
@@ -28,25 +27,24 @@ def run_pipeline(study: str,
                  k_folds: int = 0,
                  explainer: str = 'pp',
                  merge_rois: bool = True,
-                 prune_misclassified: bool = True) -> None:
-    "Run the full SPT CG-GNN pipeline."
+                 prune_misclassified: bool = True
+                 ) -> None:
+    """Run the SPT CG-GNN pipeline on the given DataFrames."""
     makedirs('tmp/', exist_ok=True)
-    df_cell, df_label, label_to_result = spt_to_dataframes(
-        study, host, dbname, user, password)
     graphs = generate_graphs(df_cell, df_label, validation_data_percent,
                              test_data_percent, roi_side_length, target_column)
 
     train_validation_test: Tuple[Tuple[List[DGLGraph], List[int]],
                                  Tuple[List[DGLGraph], List[int]],
                                  Tuple[List[DGLGraph], List[int]]] = (([], []), ([], []), ([], []))
-    for gd in graphs:
-        s: Literal[0, 1, 2] = 0
-        if gd.train_validation_test == 'validation':
-            s = 1
-        elif gd.train_validation_test == 'test':
-            s = 2
-        train_validation_test[s][0].append(gd.graph)
-        train_validation_test[s][1].append(gd.label)
+    for graph_datum in graphs:
+        i_set: Literal[0, 1, 2] = 0
+        if graph_datum.train_validation_test == 'validation':
+            i_set = 1
+        elif graph_datum.train_validation_test == 'test':
+            i_set = 2
+        train_validation_test[i_set][0].append(graph_datum.graph)
+        train_validation_test[i_set][1].append(graph_datum.label)
     model = train(train_validation_test, 'tmp/', epochs=epochs,
                   learning_rate=learning_rate, batch_size=batch_size, k_folds=k_folds)
 
@@ -74,3 +72,39 @@ def run_pipeline(study: str,
     for class_pair, df in explanations[2].items():
         df.to_csv(f'out/separability_k_best_{class_pair}.csv')
     rmtree('tmp/')
+
+
+def run_pipeline(study: str,
+                 host: str,
+                 dbname: str,
+                 user: str,
+                 password: str,
+                 validation_data_percent: int = 15,
+                 test_data_percent: int = 15,
+                 roi_side_length: int = 600,
+                 target_column: Optional[str] = None,
+                 batch_size: int = 1,
+                 epochs: int = 10,
+                 learning_rate: float = 10e-3,
+                 k_folds: int = 0,
+                 explainer: str = 'pp',
+                 merge_rois: bool = True,
+                 prune_misclassified: bool = True) -> None:
+    """Run the full SPT CG-GNN pipeline."""
+    df_cell, df_label, label_to_result = spt_to_dataframes(
+        study, host, dbname, user, password)
+    run_with_dfs(df_cell=df_cell,
+                 df_label=df_label,
+                 label_to_result=label_to_result,
+                 validation_data_percent=validation_data_percent,
+                 test_data_percent=test_data_percent,
+                 roi_side_length=roi_side_length,
+                 target_column=target_column,
+                 batch_size=batch_size,
+                 epochs=epochs,
+                 learning_rate=learning_rate,
+                 k_folds=k_folds,
+                 explainer=explainer,
+                 merge_rois=merge_rois,
+                 prune_misclassified=prune_misclassified
+                 )
