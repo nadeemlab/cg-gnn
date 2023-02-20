@@ -55,7 +55,7 @@ def parse_arguments():
         '--save_path',
         type=str,
         help='Path to save the cell graphs.',
-        default='/data/',
+        default='data/',
         required=False
     )
     return parser.parse_args()

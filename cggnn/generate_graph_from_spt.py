@@ -19,13 +19,14 @@ from cggnn.util.constants import CENTROIDS, FEATURES, INDICES, PHENOTYPES, TRAIN
 
 def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
                                  df_label_all_specimens: DataFrame,
-                                 image_size: Tuple[int, int],
+                                 roi_size: Tuple[int, int],
                                  target_column: Optional[str] = None,
-                                 k_folds: int = 5,
+                                 n_neighbors: int = 5,
                                  threshold: Optional[int] = None
                                  ) -> Tuple[Dict[int, Dict[str, List[DGLGraph]]],
                                             Dict[DGLGraph, str]]:
     "Create graphs from cell and label files created from SPT."
+    roi_area = prod(roi_size)
 
     # Split the data by specimen (slide)
     graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
@@ -45,26 +46,35 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
             df_target = df_specimen
         distance_square = squareform(
             pdist(df_target[['center_x', 'center_y']]))
+        slide_area = prod(slide_size)
 
         # Create as many ROIs such that the total area of the ROIs will equal the area of the
         # source image times the proportion of cells on that image that have the target phenotype
         n_rois = round(
-            proportion_of_target * prod(slide_size) / prod(image_size))
+            proportion_of_target * slide_area / roi_area)
         while (len(bounding_boxes) < n_rois) and (df_target.shape[0] > 0):
             p_dist = percentile(distance_square, proportion_of_target, axis=0)
             x, y = df_specimen.iloc[argmin(
                 p_dist), :][['center_x', 'center_y']].tolist()
-            x_min = x - image_size[0]//2
-            x_max = x + image_size[0]//2
-            y_min = y - image_size[1]//2
-            y_max = y + image_size[1]//2
+            x_min = x - roi_size[0]//2
+            x_max = x + roi_size[0]//2
+            y_min = y - roi_size[1]//2
+            y_max = y + roi_size[1]//2
+
+            # Check that this bounding box contains enough cells to do nearest neighbors on
+            if (df_specimen['center_x'].between(x_min, x_max) &
+                    df_specimen['center_y'].between(y_min, y_max)).shape[0] < n_neighbors + 1:
+                # If not, terminate the ROI creation process early
+                break
+
+            # Log the new bounding box and track which and how many cells haven't been captured yet
             bounding_boxes.append((x_min, x_max, y_min, y_max, x, y))
-            proportion_of_target -= prod(image_size) / prod(slide_size)
-            cells_to_keep = ~df_target['center_x'].between(
-                x_min, x_max) & ~df_target['center_y'].between(y_min, y_max)
-            df_target = df_target.loc[cells_to_keep, :]
-            distance_square = distance_square[cells_to_keep,
-                                              :][:, cells_to_keep]
+            proportion_of_target -= roi_area / slide_area
+            cells_not_yet_captured = ~(df_target['center_x'].between(
+                x_min, x_max) & df_target['center_y'].between(y_min, y_max))
+            df_target = df_target.loc[cells_not_yet_captured, :]
+            distance_square = distance_square[cells_not_yet_captured,
+                                              :][:, cells_not_yet_captured]
 
         # Create feature, centroid, and label arrays and then the graph
         df_features = df_specimen.loc[:,
@@ -78,11 +88,11 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
             features = df_features.loc[df_roi.index, ].astype(int).values
             phenotypes = df_phenotypes.loc[df_roi.index, ].astype(int).values
             graph_instance = _create_graph(
-                df_roi.index.to_numpy(), centroids, features, phenotypes, k_folds=k_folds,
+                df_roi.index.to_numpy(), centroids, features, phenotypes, n_neighbors=n_neighbors,
                 threshold=threshold)
             graphs_by_specimen[specimen].append(graph_instance)
             roi_names[graph_instance] = \
-                f'melanoma_{specimen}_{i}_{image_size[0]}x{image_size[1]}_x{x}_y{y}'
+                f'melanoma_{specimen}_{i}_{roi_size[0]}x{roi_size[1]}_x{x}_y{y}'
 
     # Split the graphs by specimen and label
     graphs_by_label_and_specimen: Dict[int,
@@ -97,7 +107,7 @@ def _create_graph(node_indices: ndarray,
                   centroids: ndarray,
                   features: ndarray,
                   phenotypes: ndarray,
-                  k_folds: int = 5,
+                  n_neighbors: int = 5,
                   threshold: Optional[int] = None
                   ) -> DGLGraph:
     """Generate the graph topology from the provided instance_map using (thresholded) kNN
@@ -106,7 +116,7 @@ def _create_graph(node_indices: ndarray,
         centroids (array): Node centroids
         features (array): Features of each node. Shape (nr_nodes, nr_features)
         phenotypes (array): A set of alternative features for each node based on phenotypes.
-        k_folds (int, optional): Number of neighbors. Defaults to 5.
+        n_neighbors (int, optional): Number of neighbors. Defaults to 5.
         threshold (int, optional): Maximum allowed distance between 2 nodes.
                                     Defaults to None (no thresholding).
     Returns:
@@ -126,7 +136,7 @@ def _create_graph(node_indices: ndarray,
     # build kNN adjacency
     adj = kneighbors_graph(
         centroids,
-        k_folds,
+        n_neighbors,
         mode="distance",
         include_self=False,
         metric="euclidean").toarray()
