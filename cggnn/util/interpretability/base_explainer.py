@@ -1,17 +1,13 @@
 """Base explainer."""
 
-from abc import abstractmethod
-from typing import Optional, Tuple
-import dgl
-import numpy as np
+from typing import Optional
 import torch
-import os
 
 from ..pipeline import PipelineStep
 
 
 class BaseExplainer(PipelineStep):
-    """Base pipelines step"""
+    """Base pipelines step."""
 
     def __init__(
         self,
@@ -21,10 +17,10 @@ class BaseExplainer(PipelineStep):
         """Abstract class that defines an explainer.
 
         Args:
-            model_path (Optional[str], optional): Model path to pre-trained model. The path can be local or an MLflow URL. Defaults to None.
+            model_path (Optional[str], optional): Model path to pre-trained model. The path can be
+                local or an MLflow URL. Defaults to None.
             model (Optional[torch.nn.Module], optional): PyTorch model to use. Defaults to None.
         """
-
         super().__init__(**kwargs)
 
         # look for GPU

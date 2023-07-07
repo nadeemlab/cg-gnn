@@ -1,4 +1,4 @@
-"Run through the entire SPT CG-GNN pipeline."
+"""Run through the entire SPT CG-GNN pipeline."""
 
 from argparse import ArgumentParser
 
@@ -6,7 +6,7 @@ from cggnn.run_all import run_pipeline
 
 
 def parse_arguments():
-    "Process command line arguments."
+    """Process command line arguments."""
     parser = ArgumentParser()
     parser.add_argument(
         '--study',

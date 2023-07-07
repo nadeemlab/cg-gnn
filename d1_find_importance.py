@@ -1,4 +1,4 @@
-"Update the cell graphs with each cell's importance value."
+"""Update the cell graphs with each cell's importance value."""
 
 from os.path import join
 from argparse import ArgumentParser
@@ -11,7 +11,7 @@ from cggnn.util import load_cell_graphs, instantiate_model
 
 
 def parse_arguments():
-    "Process command line arguments."
+    """Process command line arguments."""
     parser = ArgumentParser()
     parser.add_argument(
         '--cg_path',

@@ -1,4 +1,4 @@
-"Explain a cell graph (CG) prediction using a pretrained CG-GNN and a graph explainer."
+"""Explain a cell graph (CG) prediction using a pretrained CG-GNN and a graph explainer."""
 from argparse import ArgumentParser
 
 from pandas import read_hdf
@@ -8,7 +8,7 @@ from cggnn.util import load_cell_graphs, instantiate_model
 
 
 def parse_arguments():
-    "Process command line arguments."
+    """Process command line arguments."""
     parser = ArgumentParser()
     parser.add_argument(
         '--cg_path',

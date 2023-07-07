@@ -1,3 +1,5 @@
+"""Multi-layer perceptron layer."""
+
 import torch.nn as nn
 from torch.nn import Sequential, Linear
 import torch
@@ -6,6 +8,7 @@ from .constants import ACTIVATIONS
 
 
 class MLP(nn.Module):
+    """Multi-layer perceptron."""
 
     def __init__(
         self,
@@ -20,8 +23,8 @@ class MLP(nn.Module):
         dropout=0.,
         with_lrp=False
     ):
-        """
-        MLP Constructor
+        """Construct a MLP.
+
         :param in_dim: (int) input dimension
         :param hidden_dim: (int) hidden dimension(s), if type(h_dim) is int => all the hidden have the same dimensions
                                                  if type(h_dim) is list => hidden use val in list as dimension
@@ -78,12 +81,11 @@ class MLP(nn.Module):
                 print('MLP layer {} has params {}'.format(layer_id, layer))
 
     def _build_layer(self, layer_id, act=True):
-        """
-        Build layer
+        """Build layer.
+
         :param layer_id: (int)
         :return: layer (Sequential)
         """
-
         layer = Sequential()
         layer.add_module("fc",
                          Linear(self.dims[layer_id],
@@ -100,9 +102,7 @@ class MLP(nn.Module):
         return layer
 
     def _set_biases(self, bias, num_layers):
-        """
-        Set and control bias input
-        """
+        """Set and control bias input."""
         if isinstance(bias, bool):
             self.bias = num_layers * [bias]
         elif isinstance(bias, list):
@@ -115,9 +115,7 @@ class MLP(nn.Module):
                 "Unsupported type for bias. Needs to be of type bool or list.")
 
     def _set_batch_norm(self, use_bn, num_layers):
-        """
-        Set and control batch norm param
-        """
+        """Set and control batch norm param."""
         if isinstance(use_bn, bool):
             self.use_bn = num_layers * [use_bn]
         else:
@@ -125,9 +123,7 @@ class MLP(nn.Module):
                 "Unsupported type for batch norm. Needs to be of type bool.")
 
     def _set_dropout(self, dropout, num_layers):
-        """
-        Set and control dropout params
-        """
+        """Set and control dropout params."""
         if isinstance(dropout, float):
             self.dropout = num_layers * [dropout]
         else:
@@ -135,9 +131,7 @@ class MLP(nn.Module):
                 "Unsupported type for batch norm. Needs to be of type float.")
 
     def _set_mlp_dimensions(self, in_dim, h_dim, out_dim, num_layers):
-        """
-        Set and control mlp dimensions
-        """
+        """Set and control mlp dimensions."""
         if isinstance(h_dim, int):
             self.dims = [in_dim] + (num_layers - 1) * [h_dim] + [out_dim]
         elif isinstance(h_dim, list):
@@ -151,9 +145,7 @@ class MLP(nn.Module):
             )
 
     def _set_activations(self, act):
-        """
-        Set and control activations
-        """
+        """Set and control activations."""
         if act in ACTIVATIONS.keys():
             self.act = act
             self.activation = ACTIVATIONS[act]
@@ -164,13 +156,14 @@ class MLP(nn.Module):
             )
 
     def set_lrp(self, with_lrp):
+        """Set LRP function."""
         self.with_lrp = with_lrp
         if self.with_lrp:
             self.forward_activations = []
 
     def forward(self, feats):
-        """
-        MLP forward
+        """MLP forward.
+
         :param feats: (FloatTensor) features to pass through MLP
         :return: out: MLP output
         """
@@ -184,6 +177,7 @@ class MLP(nn.Module):
         return out
 
     def lrp(self, relevance_score):
+        """Find LRP of relevance_score."""
         for layer_id in range(len(self.mlp) - 1, -1, -1):
             pos_weights = torch.clamp(self.mlp[layer_id][0].weight, min=0)
             rel_unnorm = torch.mm(

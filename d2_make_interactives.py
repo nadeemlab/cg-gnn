@@ -1,4 +1,4 @@
-"Generate interactive cell graph visualizations."
+"""Generate interactive cell graph visualizations."""
 
 from argparse import ArgumentParser
 from typing import Dict, List, DefaultDict
@@ -11,7 +11,7 @@ from cggnn.util import load_cell_graphs
 
 
 def parse_arguments():
-    "Process command line arguments."
+    """Process command line arguments."""
     parser = ArgumentParser()
     parser.add_argument(
         '--cg_path',

@@ -1,6 +1,4 @@
-"""
-Query SPT PSQL database for cell-level attributes and slide-level labels and return as DataFrames.
-"""
+"""Query SPT PSQL database for cell-level attributes and slide-level labels and return."""
 from os.path import exists
 from base64 import b64decode
 from mmap import mmap
@@ -16,7 +14,7 @@ from cggnn.util import load_label_to_result
 
 
 def _get_targets(conn, measurement_study: str) -> DataFrame:
-    "Get all target values for all cells."
+    """Get all target values for all cells."""
     df_targets = read_sql(f"""
         SELECT
             eq.histological_structure,
@@ -46,7 +44,7 @@ def _get_targets(conn, measurement_study: str) -> DataFrame:
 
 
 def _get_target_names(conn) -> Dict[int, str]:
-    "Get names of each chemical species."
+    """Get names of each chemical species."""
     s_target_names = read_sql("""
         SELECT
             identifier,
@@ -60,7 +58,7 @@ def _get_target_names(conn) -> Dict[int, str]:
 
 
 def _get_phenotypes(conn, analysis_study: str) -> DataFrame:
-    "Get all phenotype signatures."
+    """Get all phenotype signatures."""
     df_phenotypes = read_sql(f"""
         SELECT
             cp.name,
@@ -76,7 +74,7 @@ def _get_phenotypes(conn, analysis_study: str) -> DataFrame:
 
 
 def _get_shape_strings(conn, measurement_study: str) -> DataFrame:
-    "Get the shapefile strings for each histological structure."
+    """Get the shapefile strings for each histological structure."""
     df_shapes = read_sql(f"""
         SELECT  
             histological_structure,
@@ -103,7 +101,7 @@ def _get_shape_strings(conn, measurement_study: str) -> DataFrame:
 
 
 def _extract_points(row: Series) -> Tuple[float, float]:
-    "Convert shapefile string to center coordinate."
+    """Convert shapefile string to center coordinate."""
     shapefile_base64_ascii: str = row['shp_string']
     bytes_original = b64decode(shapefile_base64_ascii.encode('utf-8'))
     mm = mmap(-1, len(bytes_original))
@@ -125,7 +123,7 @@ def _extract_points(row: Series) -> Tuple[float, float]:
 
 
 def _get_centroids(df: DataFrame) -> DataFrame:
-    "Get the centroids from a dataframe with histological structure and shapefile strings."
+    """Get the centroids from a dataframe with histological structure and shapefile strings."""
     df = df.copy()
     df = df.apply(_extract_points, axis=1)
     df.drop('shp_string', axis=1, inplace=True)
@@ -137,8 +135,7 @@ def _create_cell_df(df_targets: DataFrame,
                     target_names: Dict[int, str],
                     df_phenotypes: DataFrame,
                     df_shapes: DataFrame) -> DataFrame:
-    "Find chemical species, phenotypes, and locations and merge into a DataFrame."
-
+    """Find chemical species, phenotypes, and locations and merge into a DataFrame."""
     # Reorganize targets data so that the indices is the histological structure
     # and the columns are the target values / chemical species
     columns: List[Union[int, str]] = list(range(df_targets['target'].min(),
@@ -170,7 +167,7 @@ def _create_cell_df(df_targets: DataFrame,
 
 
 def _create_label_df(conn, specimen_study: str) -> Tuple[DataFrame, Dict[int, str]]:
-    "Get slide-level results."
+    """Get slide-level results."""
     df = read_sql(f"""
         SELECT 
             slide,
@@ -195,7 +192,7 @@ def spt_to_dataframes(study: str,
                       password: str,
                       output_name: Optional[str] = None
                       ) -> Tuple[DataFrame, DataFrame, Dict[int, str]]:
-    "Query SPT PSQL database for cell-level attributes and slide-level labels and return."
+    """Query SPT PSQL database for cell-level attributes and slide-level labels and return."""
     if output_name is not None:
         dict_filename = output_name + '_label_to_result.json'
         label_filename = output_name + '_labels.h5'

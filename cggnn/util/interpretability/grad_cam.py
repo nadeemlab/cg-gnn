@@ -1,4 +1,6 @@
-from typing import List, Optional, Tuple, Union
+"""GradCAM family of interpretation mechanisms."""
+
+from typing import List, Tuple, Union
 
 import dgl
 import numpy as np
@@ -12,15 +14,15 @@ EPS = 10e-7
 
 
 class BaseCAM(object):
+    """Base CAM explainer module."""
 
     def __init__(self, model: torch.nn.Module, conv_layers: List[str]) -> None:
-        """
-        BaseCAM constructor.
+        """Construct an instance of BaseCAM.
+
         Args:
             model (torch.nn.Module): Input model.
             conv_layer (List[str]): List of tensor names to compute activations on.
         """
-
         self.model = model
         self.forward_hook = list()
         self.backward_hook = list()
@@ -47,12 +49,12 @@ class BaseCAM(object):
         self._score_used = False
 
     def _set_forward_hook(self, module, input, output):
-        """Hook activations (forward hook)."""
+        """Set hook activations (forward hook)."""
         if self._hooks_enabled:
             self.forward_hook.append(output.data)
 
     def _set_backward_hook(self, module, input, output):
-        """Hook gradient (backward hook)."""
+        """Set hook gradient (backward hook)."""
         if self._hooks_enabled:
             self.backward_hook.append(output[0].data)
 
@@ -72,8 +74,7 @@ class BaseCAM(object):
         raise NotImplementedError
 
     def _precheck(self, class_idx, scores):
-        """Check for invalid computation cases"""
-
+        """Check for invalid computation cases."""
         # Check that forward has already occurred
         if not self.forward_hook:
             raise AssertionError(
@@ -91,18 +92,17 @@ class BaseCAM(object):
             )
 
     def __call__(self, class_idx, scores=None, normalized=True):
-        """
-        Compute CAM for a specified class
+        """Compute CAM for a specified class.
 
         Args:
             class_idx (int): Output class index of the target class whose CAM will be computed.
-            scores (torch.Tensor[1, K], optional): Forward output scores of the hooked model, ie logits.
+            scores (torch.Tensor[1, K], optional): Forward output scores of the hooked model, i.e.,
+                logits.
             normalized (bool, optional): Whether the CAM should be normalized.
 
         Returns:
             torch.Tensor[M, N]: Class activation map of hooked conv layer.
         """
-
         # Integrity check
         self._precheck(class_idx, scores)
 
@@ -133,11 +133,11 @@ class BaseCAM(object):
         return batch_cams
 
     def __repr__(self):
+        """Return the name of the class."""
         return f"{self.__class__.__name__}()"
 
     def _backprop(self, scores, class_idx):
-        """Backpropagate the loss for a specific output class"""
-
+        """Backpropagate the loss for a specific output class."""
         if self.forward_hook is None:
             raise TypeError(
                 "Apply forward path before calling backward hook."
@@ -150,32 +150,34 @@ class BaseCAM(object):
 
 
 class GradCAM(BaseCAM):
-    """
-        Class activation map extraction as in `"Grad-CAM: Visual Explanations from Deep Networks
-        via Gradient-based Localization" <https://arxiv.org/pdf/1610.02391.pdf>`_.
+    """Class activation map extraction.
+
+    As in "Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization"
+        <https://arxiv.org/pdf/1610.02391.pdf>.
     """
 
     def _get_weights(self, class_idx, scores):
-        """Computes the weight coefficients of the hooked activation maps"""
+        """Compute the weight coefficients of the hooked activation maps."""
         # Backpropagate
         self._backprop(scores, class_idx)
         grads = torch.stack(list(reversed(self.backward_hook)), dim=2)
         return grads.mean(axis=0)
 
     def __call__(self, *args, **kwargs):
+        """Empty the backward hook list before calling BaseCAM."""
         self.backward_hook = list()
         return super().__call__(*args, **kwargs)
 
 
 class GradCAMpp(BaseCAM):
-    """
-    Class activation map extraction as in `"Grad-CAM++: Improved Visual Explanations for
-    Deep Convolutional Networks" <https://arxiv.org/pdf/1710.11063.pdf>`_.
+    """Class activation map extraction.
+
+    As in "Grad-CAM++: Improved Visual Explanations for Deep Convolutional Networks"
+        <https://arxiv.org/pdf/1710.11063.pdf>.
     """
 
     def _get_weights(self, class_idx, scores):
-        """Computes the weight coefficients of the hooked activation maps"""
-
+        """Compute the weight coefficients of the hooked activation maps."""
         # Backpropagate
         self._backprop(scores, class_idx)
 
@@ -200,19 +202,21 @@ class GradCAMpp(BaseCAM):
         return weights
 
     def __call__(self, *args, **kwargs):
+        """Empty the backward hook list before calling BaseCAM."""
         self.backward_hook = list()
         return super().__call__(*args, **kwargs)
 
 
 class BaseGraphGradCAMExplainer(BaseExplainer):
+    """Explain a graph using a GradCAM variant."""
+
     def __init__(
         self,
         gnn_layer_name: List[str] = None,
         gnn_layer_ids: List[str] = None,
         **kwargs
     ) -> None:
-        """
-        BaseGraphGradCAMExplainer explainer constructor.
+        """Construct an instance of BaseGraphGradCAMExplainer.
 
         Args:
             gnn_layer_name (List[str]): List of reference layers to use for computing CAM
@@ -240,13 +244,13 @@ class BaseGraphGradCAMExplainer(BaseExplainer):
     def _process(
         self, graph: dgl.DGLGraph, class_idx: Union[None, int, List[int]] = None
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Compute node importances for a single class
+        """Compute node importances for a single class.
 
         Args:
             graph (dgl.DGLGraph): Graph to explain.
-            class_idx (Union[None, int, List[int]]): Class indices (index) to explain. If None results in using the winning class.
-                                                     If a list is provided, explainer all the class indices provided.
-                                                     Defaults to None.
+            class_idx (Union[None, int, List[int]]): Class indices (index) to explain. If None
+                results in using the winning class. If a list is provided, explainer all the class
+                indices provided. Defaults to None.
 
         Returns:
             node_importance (np.ndarray): Node-level importance scores.
@@ -263,7 +267,7 @@ class BaseGraphGradCAMExplainer(BaseExplainer):
     def _process_all(
         self, graph: dgl.DGLGraph, classes: List[int]
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Compute node importances for all classes
+        """Compute node importances for all classes.
 
         Args:
             graph (dgl.DGLGraph): Graph to explain
@@ -294,9 +298,7 @@ class BaseGraphGradCAMExplainer(BaseExplainer):
 
 
 class GraphGradCAMExplainer(BaseGraphGradCAMExplainer):
-    """
-    Explain a graph with GradCAM.
-    """
+    """Explain a graph with GradCAM."""
 
     def _get_extractor(self):
         return GradCAM(
@@ -305,9 +307,7 @@ class GraphGradCAMExplainer(BaseGraphGradCAMExplainer):
 
 
 class GraphGradCAMPPExplainer(BaseGraphGradCAMExplainer):
-    """
-    Explain a graph with GradCAM++.
-    """
+    """Explain a graph with GradCAM++."""
 
     def _get_extractor(self):
         return GradCAMpp(

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-Script for training CG-GNN, TG-GNN and HACT models
-"""
+"""Script for training CG-GNN, TG-GNN, and HACT models."""
 
 from argparse import ArgumentParser
 from typing import Tuple, List
@@ -13,7 +11,7 @@ from cggnn.util import load_cell_graphs
 
 
 def parse_arguments():
-    "Parse command line arguments."
+    """Parse command line arguments."""
     parser = ArgumentParser()
     parser.add_argument(
         '--cg_path',

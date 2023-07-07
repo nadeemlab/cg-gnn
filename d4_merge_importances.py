@@ -1,4 +1,4 @@
-"Explain a cell graph (CG) prediction using a pretrained CG-GNN and a graph explainer."
+"""Merge cell importance scores multiple ROIs into a single score."""
 
 from os.path import join
 from argparse import ArgumentParser
@@ -11,7 +11,7 @@ from cggnn.util import load_cell_graphs, instantiate_model
 
 
 def parse_arguments():
-    "Process command line arguments."
+    """Process command line arguments."""
     parser = ArgumentParser()
     parser.add_argument(
         '--cg_path',

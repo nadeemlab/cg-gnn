@@ -1,6 +1,4 @@
-"""
-Create and save interactive plots.
-"""
+"""Create and save interactive plots."""
 
 from os import makedirs
 from os.path import join
@@ -25,8 +23,7 @@ def _make_bokeh_graph_plot(graph: DiGraph,
                            phenotype_names: List[str],
                            graph_name: str,
                            out_directory: str) -> None:
-    "Create bokeh interactive graph visualization."
-
+    """Create bokeh interactive graph visualization."""
     # Create bokeh plot and prepare to save it to file
     graph_name = graph_name.split('/')[-1]
     output_file(join(out_directory, graph_name + '.html'),
@@ -95,8 +92,7 @@ def _make_bokeh_graph_plot(graph: DiGraph,
 def _convert_dgl_to_networkx(graph: DGLGraph,
                              feature_names: List[str],
                              phenotype_names: List[str]) -> DiGraph:
-    "Convert DGL graph to networkx graph for plotting interactive."
-
+    """Convert DGL graph to networkx graph for plotting interactive."""
     if IMPORTANCES not in graph.ndata:
         raise ValueError(
             'importance scores not yet found. Run calculate_importance_scores first.')
@@ -121,8 +117,7 @@ def _convert_dgl_to_networkx(graph: DGLGraph,
 
 
 def _stich_specimen_graphs(graphs: List[DiGraph]) -> DiGraph:
-    "Stitch DGL graphs together into a single networkx graph."
-
+    """Stitch DGL graphs together into a single networkx graph."""
     if len(graphs) == 0:
         raise ValueError("Must have at least one graph to stitch.")
     if len(graphs) == 1:
@@ -152,7 +147,7 @@ def generate_interactives(graphs_to_plot: Dict[str, List[DGLGraph]],
                           phenotype_names: List[str],
                           out_directory: str
                           ) -> None:
-    "Create bokeh interactive plots for all graphs in the out_directory."
+    """Create bokeh interactive plots for all graphs in the out_directory."""
     makedirs(out_directory, exist_ok=True)
     for name, dgl_graphs in tqdm(graphs_to_plot.items()):
         graphs = [_convert_dgl_to_networkx(

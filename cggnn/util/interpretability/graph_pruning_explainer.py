@@ -1,14 +1,16 @@
-from tqdm import tqdm
+"""Graph pruning GNN interpretation and explaining."""
+
 from copy import deepcopy
-import dgl
+import importlib
 import math
+
+from tqdm import tqdm
+import dgl
 from scipy.stats import entropy
-import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import importlib
 
 from ..ml.layers.constants import GNN_NODE_FEAT_IN
 from .base_explainer import BaseExplainer
@@ -20,6 +22,8 @@ MODEL_MODULE = 'cggnn.util.ml'
 
 
 class GraphPruningExplainer(BaseExplainer):
+    """Use graph pruning to explain a GNN."""
+
     def __init__(
         self,
         entropy_loss_weight: float = 1.0,
@@ -33,8 +37,7 @@ class GraphPruningExplainer(BaseExplainer):
         weight_decay: float = 5e-4,
         **kwargs
     ) -> None:
-        """
-        Graph Pruning Explainer (GNNExplainer) constructor
+        """Construct an instance of Graph Pruning Explainer (GNNExplainer).
 
         Args:
             entropy_loss_weight (float): how much weight to put on the
@@ -54,7 +57,6 @@ class GraphPruningExplainer(BaseExplainer):
             lr (float): Learning rate. Default to 0.01.
             weight_decay (float): Weight decay. Default to 5e-4.
         """
-
         super(GraphPruningExplainer, self).__init__(**kwargs)
 
         # GNNExplainer needs to work with dense layers, and not with DGL
@@ -91,7 +93,8 @@ class GraphPruningExplainer(BaseExplainer):
         model_name = dgl_model.__class__.__name__
         dgl_gnn_params = dgl_model.gnn_params
         dgl_layer_type = dgl_gnn_params['layer_type']
-        assert dgl_layer_type == 'gin_layer', "Only GIN layers are supported for using GNNExplainer."
+        assert dgl_layer_type == 'gin_layer', \
+            "Only GIN layers are supported for using GNNExplainer."
         dense_gnn_params = deepcopy(dgl_gnn_params)
         dense_gnn_params['layer_type'] = 'dense_' + dgl_layer_type
 
@@ -125,14 +128,12 @@ class GraphPruningExplainer(BaseExplainer):
         return model
 
     def _process(self, graph: dgl.DGLGraph, label: int = None):
-        """
-        Explain a graph instance
+        """Explain a graph instance.
 
         Args:
             graph (dgl.DGLGraph): Input graph to explain
             label (int): Label attached to the graph. Required.
         """
-
         sub_adj = graph.adjacency_matrix().to_dense().unsqueeze(dim=0)
         sub_feat = graph.ndata[GNN_NODE_FEAT_IN].unsqueeze(dim=0)
 
@@ -210,6 +211,8 @@ class GraphPruningExplainer(BaseExplainer):
 
 
 class ExplainerModel(nn.Module):
+    """Explain a GNN model using a model."""
+
     def __init__(
         self,
         model: nn.Module,
@@ -220,8 +223,7 @@ class ExplainerModel(nn.Module):
         train_params: dict,
         use_sigmoid: bool = True,
     ):
-        """
-        Explainer constructor.
+        """Construct an Explainer.
 
         Args:
             model (nn.Module): Torch model.
@@ -232,7 +234,6 @@ class ExplainerModel(nn.Module):
             train_params (dict): Training params for learning mask.
             use_sigmoid (bool): Default to True.
         """
-
         super(ExplainerModel, self).__init__()
 
         # set data & model
@@ -349,12 +350,13 @@ class ExplainerModel(nn.Module):
         elif self.mask_act == "relu":
             node_mask = nn.ReLU()(self.node_mask)
         else:
-            raise ValueError('Unsupported mask activation {}. Options'
-                             'are "sigmoid", "ReLU"'.format(self.mask_act))
+            raise ValueError(f'Unsupported mask activation {self.mask_act}. Options are '
+                             '"sigmoid", "ReLU"')
         return node_mask
 
     @staticmethod
     def sigmoid(x, t=1):
+        """Calculate sigmoid function."""
         return 1 / (1 + torch.exp(-t * x))
 
     def _masked_node_feats(self):
@@ -364,29 +366,24 @@ class ExplainerModel(nn.Module):
         return x
 
     def forward(self):
-        """
-        Forward pass.
-        """
+        """Forward pass."""
         masked_x = self._masked_node_feats()
         graph = [self.adj, masked_x]
         ypred = self.model(graph)
         return ypred, masked_x
 
     def distillation_loss(self, inner_logits):
-        """
-        Compute distillation loss.
-        """
+        """Compute distillation loss."""
         log_output = nn.LogSoftmax(dim=1)(inner_logits)
         cross_entropy = self.init_probs * log_output
         return -torch.mean(torch.sum(cross_entropy, dim=1))
 
     def loss(self, pred: torch.tensor):
-        """
-        Compute new overall loss given current prediction.
+        """Compute new overall loss given current prediction.
+
         Args:
             pred (torch.tensor): Prediction made by current model.
         """
-
         # 1. cross-entropy + distillation loss
         ce_loss = F.cross_entropy(pred.unsqueeze(dim=0), self.label)
         distillation_loss = self.distillation_loss(pred.unsqueeze(dim=0))

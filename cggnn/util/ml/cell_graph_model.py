@@ -1,3 +1,5 @@
+"""GNN that predicts a y-variable using cell graphs derived from tissue slide regions."""
+
 from typing import Tuple, Union
 
 from dgl import DGLGraph
@@ -10,9 +12,7 @@ from .layers.multi_layer_gnn import MultiLayerGNN
 
 
 class CellGraphModel(BaseModel):
-    """
-    Cell Graph Model. Apply a GNN at the cell graph level.
-    """
+    """Cell Graph Model. Apply a GNN at the cell graph level."""
 
     def __init__(
         self,
@@ -21,15 +21,13 @@ class CellGraphModel(BaseModel):
         node_dim: int,
         **kwargs
     ) -> None:
-        """
-        CellGraphModel model constructor
+        """Construct a CellGraphModel model.
 
         Args:
             gnn_params: (dict) GNN configuration parameters.
             classification_params: (dict) classification configuration parameters.
             node_dim (int): Cell node feature dimension.
         """
-
         super().__init__(**kwargs)
 
         # 1- set class attributes
@@ -45,18 +43,14 @@ class CellGraphModel(BaseModel):
         self._build_classification_params()
 
     def _build_cell_graph_params(self):
-        """
-        Build cell graph multi layer GNN
-        """
+        """Build cell graph multi layer GNN."""
         self.cell_graph_gnn = MultiLayerGNN(
             input_dim=self.node_dim,
             **self.gnn_params
         )
 
     def _build_classification_params(self):
-        """
-        Build classification parameters
-        """
+        """Build classification parameters."""
         if self.readout_op == "concat":
             emd_dim = self.gnn_params['output_dim'] * \
                 self.gnn_params['num_layers']
@@ -75,8 +69,7 @@ class CellGraphModel(BaseModel):
         graph: Union[DGLGraph,
                      Tuple[FloatTensor, FloatTensor]]
     ) -> FloatTensor:
-        """
-        Foward pass.
+        """Forward pass.
 
         Args:
             graph (Union[dgl.DGLGraph, Tuple[FloatTensor, FloatTensor]]): Cell graph to process.
@@ -99,10 +92,12 @@ class CellGraphModel(BaseModel):
         return out
 
     def set_lrp(self, with_lrp):
+        """Set LRP function."""
         self.cell_graph_gnn.set_lrp(with_lrp)
         self.pred_layer.set_lrp(with_lrp)
 
     def lrp(self, out_relevance_score):
+        """Apply LRP function to out relevance score."""
         # lrp over the classification
         relevance_score = self.pred_layer.lrp(out_relevance_score)
 

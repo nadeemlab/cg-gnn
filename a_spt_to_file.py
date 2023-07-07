@@ -1,13 +1,11 @@
-"""
-Query SPT PSQL database for cell-level features and slide-level labels and save to two CSV files.
-"""
+"""Query SPT PSQL database for cell-level features and slide-level labels and save to two CSVs."""
 from argparse import ArgumentParser
 
 from cggnn.spt_to_df import spt_to_dataframes
 
 
 def parse_arguments():
-    "Process command line arguments."
+    """Process command line arguments."""
     parser = ArgumentParser()
     parser.add_argument(
         '--study',

@@ -2,7 +2,8 @@
 Explain a cell graph (CG) prediction using a pretrained CG-GNN and a graph explainer.
 
 As used in:
-"Quantifying Explainers of Graph Neural Networks in Computational Pathology", Jaume et al, CVPR, 2021.
+"Quantifying Explainers of Graph Neural Networks in Computational Pathology",
+    Jaume et al, CVPR, 2021.
 """
 
 from os.path import join
@@ -22,7 +23,7 @@ from .specimen_importance import save_importances, unify_importance_across
 
 def _class_pair_rephrase(class_pair: Tuple[int, int],
                          label_to_result: Dict[int, str]) -> Tuple[str, str]:
-    'Convert an int class pair to a tuple class pair.'
+    """Convert an int class pair to a tuple class pair."""
     return tuple(label_to_result[label] for label in class_pair)
 
 
@@ -42,8 +43,7 @@ def explain_cell_graphs(cell_graphs_data: List[GraphData],
                         out_directory: Optional[str] = None
                         ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame],
                                    Dict[int, float]]:
-    "Generate explanations for all the cell graphs."
-
+    """Generate explanations for all the cell graphs."""
     cell_graphs_and_labels = ([d.graph for d in cell_graphs_data], [
                               d.label for d in cell_graphs_data])
     calculate_importance(cell_graphs_and_labels[0], model, explainer_model)

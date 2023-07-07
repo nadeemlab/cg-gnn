@@ -1,4 +1,4 @@
-"Consistent names for dict field strings."
+"""Consistent names for dict field strings."""
 
 INDICES = 'histological_structure'
 FEATURES = 'features'

@@ -1,3 +1,5 @@
+"""Constants used in machine learning layers."""
+
 import torch
 from torch.nn import ReLU, Tanh, Sigmoid, ELU, LeakyReLU, PReLU
 import dgl
@@ -36,6 +38,7 @@ GNN_MODULE = 'cggnn.util.ml.layers.{}'
 
 
 def min_nodes(graph, features):
+    """Return min nodes."""
     from dgl.backend import pytorch
     feat = pytorch.pad_packed_tensor(
         graph.ndata[features],
@@ -53,10 +56,12 @@ READOUT_TYPES = {
 
 
 def reduce_min(x, dim):
+    """Get mins in the dim-th dimension."""
     return torch.min(x, dim=dim)[0]
 
 
 def reduce_max(x, dim):
+    """Get maxes in the dim-th dimension."""
     return torch.max(x, dim=dim)[0]
 
 
@@ -71,22 +76,27 @@ EPS = 1e-5
 
 
 def aggregate_mean(h):
+    """Find means in the first dimension."""
     return torch.mean(h, dim=1)
 
 
 def aggregate_max(h):
+    """Get maxes in the first dimension."""
     return torch.max(h, dim=1)[0]
 
 
 def aggregate_min(h):
+    """Get min in the first dimension."""
     return torch.min(h, dim=1)[0]
 
 
 def aggregate_std(h):
+    """Aggregate standard deviation of h."""
     return torch.sqrt(aggregate_var(h) + EPS)
 
 
 def aggregate_var(h):
+    """Aggregate variance of h."""
     h_mean_squares = torch.mean(h * h, dim=-2)
     h_mean = torch.mean(h, dim=-2)
     var = torch.relu(h_mean_squares - h_mean * h_mean)
@@ -106,17 +116,20 @@ AGGREGATORS = {
 # X_scaled (B x N x Din) as output
 
 def scale_identity(h, D=None, avg_d=None):
+    """Scale by 1."""
     return h
 
 
 def scale_amplification(h, D, avg_d):
+    """Scale h by log(D + 1) / d * h where d is the average of the log(D + 1) in train."""
     # log(D + 1) / d * h     where d is the average of the ``log(D + 1)`` in
     # the training set
     return h * (np.log(D + 1) / avg_d["log"])
 
 
 def scale_attenuation(h, D, avg_d):
-    # (log(D + 1))^-1 / d * X     where d is the average of the ``log(D + 1))^-1`` in the training set
+    """Scale by (log(D + 1))^-1 / d * X where d is the average of the log(D + 1))^-1 in train."""
+    # (log(D + 1))^-1 / d * X     where d is the average of the ``log(D + 1))^-1`` in training
     return h * (avg_d["log"] / np.log(D + 1))
 
 

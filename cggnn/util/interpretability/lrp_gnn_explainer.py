@@ -1,3 +1,5 @@
+"""Explain a GNN using layerwise-relevance propagation."""
+
 import torch
 from copy import deepcopy
 import dgl
@@ -7,9 +9,9 @@ from ..util import torch_to_numpy
 
 
 class GraphLRPExplainer(BaseExplainer):
-    """
-    Layerwise-Relevance Propagation. This module will only work
-    if the model was built with the ml library provided.
+    """Layerwise-Relevance Propagation.
+
+    This module will only work if the model was built with the ML library provided.
     """
 
     def _apply_lrp(self, graph):
@@ -22,8 +24,7 @@ class GraphLRPExplainer(BaseExplainer):
         return node_importance, logits
 
     def _process(self, graph: dgl.DGLGraph):
-        """
-        Explain a graph with LRP.
+        """Explain a graph with LRP.
 
         Args:
             graph (dgl.DGLGraph): graph to explain.
@@ -32,7 +33,6 @@ class GraphLRPExplainer(BaseExplainer):
             node_importance (np.ndarray): Node importance scores.
             logits (np.ndarray): Predicted logits.
         """
-
         self.model.zero_grad()
         # hook before the last classification layer
         self.model.set_forward_hook(self.model.pred_layer.mlp, '0')

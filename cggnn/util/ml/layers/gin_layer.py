@@ -1,5 +1,4 @@
-"""
-Implementation of a GIN (Graph Isomorphism Network) layer.
+"""Implementation of a GIN (Graph Isomorphism Network) layer.
 
 Original paper:
     - How Powerful are Graph Neural Networks: https://arxiv.org/abs/1810.00826
@@ -19,6 +18,7 @@ from .mlp import MLP
 
 
 class GINLayer(nn.Module):
+    """A GIN (Graph Isomorphism Network) layer."""
 
     def __init__(
             self,
@@ -32,8 +32,7 @@ class GINLayer(nn.Module):
             with_lrp: bool = False,
             dropout: float = 0.,
             verbose: bool = False) -> None:
-        """
-        GIN Layer constructor
+        """Construct a GIN Layer.
 
         Args:
             node_dim (int): Input dimension of each node.
@@ -77,8 +76,8 @@ class GINLayer(nn.Module):
         )
 
     def reduce_fn(self, nodes):
-        """
-        For each node, aggregate the nodes using a reduce function.
+        """For each node, aggregate the nodes using a reduce function.
+
         Current supported functions are sum and mean.
         """
         accum = REDUCE_TYPES[self.agg_type](
@@ -86,28 +85,23 @@ class GINLayer(nn.Module):
         return {GNN_AGG_MSG: accum}
 
     def msg_fn(self, edges):
-        """
-        Message of each node
-        """
+        """Message of each node."""
         msg = edges.src[GNN_NODE_FEAT_IN]
         return {GNN_MSG: msg}
 
     def node_update_fn(self, nodes):
-        """
-        Node update function
-        """
+        """Node update function."""
         h = nodes.data[GNN_NODE_FEAT_IN]
         h = self.mlp(h)
         h = F.relu(h)
         return {GNN_NODE_FEAT_OUT: h}
 
     def forward(self, g, h):
-        """
-        Forward-pass of a GIN layer.
+        """Forward-pass of a GIN layer.
+
         :param g: (DGLGraph) graph to process.
         :param h: (FloatTensor) node features
         """
-
         if self.with_lrp:
             self.adjacency_matrix = g.adjacency_matrix(ctx=h.device).to_dense()
             if self.agg_type == 'mean':
@@ -138,6 +132,7 @@ class GINLayer(nn.Module):
         return h
 
     def set_lrp(self, with_lrp):
+        """Set LRP function to with_lrp."""
         self.with_lrp = with_lrp
         self.mlp.set_lrp(with_lrp)
 
@@ -148,9 +143,11 @@ class GINLayer(nn.Module):
 
         adjacency_matrix = torch.clamp(self.adjacency_matrix, min=0)
         if self.agg_type == 'mean':
-            adjacency_matrix = torch.div(adjacency_matrix, self.in_degrees.to(adjacency_matrix.device))
+            adjacency_matrix = torch.div(
+                adjacency_matrix, self.in_degrees.to(adjacency_matrix.device))
         adjacency_matrix = adjacency_matrix + \
-            torch.eye(self.adjacency_matrix.shape[0]).to(relevance_score.device)
+            torch.eye(self.adjacency_matrix.shape[0]).to(
+                relevance_score.device)
         rel_unnorm = torch.mm(self.input_features, adjacency_matrix.t()) + 1e-9
         rel_unnorm = relevance_score / rel_unnorm.t()
         contrib = torch.mm(adjacency_matrix, rel_unnorm)
@@ -158,10 +155,7 @@ class GINLayer(nn.Module):
         return relevance_score
 
     def lrp(self, out_relevance_score):
-        """
-        Implement lrp for GIN layer
-        """
-
+        """Find LRP of out_relevance_score."""
         # 1. lrp over the node update function
         relevance_score = self.mlp.lrp(out_relevance_score)
 

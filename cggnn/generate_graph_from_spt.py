@@ -1,4 +1,4 @@
-"Generates graph from saved SPT files."
+"""Generates graph from saved SPT files."""
 from os import makedirs, listdir
 from os.path import join, isdir
 from random import shuffle, randint
@@ -25,7 +25,7 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
                                  threshold: Optional[int] = None
                                  ) -> Tuple[Dict[int, Dict[str, List[DGLGraph]]],
                                             Dict[DGLGraph, str]]:
-    "Create graphs from cell and label files created from SPT."
+    """Create graphs from cell and label files created from SPT."""
     roi_area = prod(roi_size)
 
     # Split the data by specimen (slide)
@@ -110,7 +110,8 @@ def _create_graph(node_indices: ndarray,
                   n_neighbors: int = 5,
                   threshold: Optional[int] = None
                   ) -> DGLGraph:
-    """Generate the graph topology from the provided instance_map using (thresholded) kNN
+    """Generate the graph topology from the provided instance_map using (thresholded) kNN.
+
     Args:
         node_indices (array): Indices for each node.
         centroids (array): Node centroids
@@ -122,7 +123,6 @@ def _create_graph(node_indices: ndarray,
     Returns:
         DGLGraph: The constructed graph
     """
-
     # add nodes
     num_nodes = features.shape[0]
     graph_instance = graph([])
@@ -156,7 +156,7 @@ def _split_rois(graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]
                 ) -> Tuple[Dict[str, List[DGLGraph]],
                            Dict[str, List[DGLGraph]],
                            Dict[str, List[DGLGraph]]]:
-    "Randomly allocate graphs to train, validation, and test sets."
+    """Randomly allocate graphs to train, validation, and test sets."""
     train_graphs: Dict[str, List[DGLGraph]] = {}
     validation_graphs: Dict[str, List[DGLGraph]] = {}
     test_graphs: Dict[str, List[DGLGraph]] = {}
@@ -251,8 +251,7 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
                     target_column: Optional[str] = None,
                     save_path: Optional[str] = None
                     ) -> List[GraphData]:
-    "Generate cell graphs from SPT server files and save to disk if requested."
-
+    """Generate cell graphs from SPT server files and save to disk if requested."""
     # Handle inputs
     if not 0 <= validation_data_percent < 100:
         raise ValueError(

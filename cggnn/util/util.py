@@ -1,4 +1,5 @@
 """Cell/tissue graph dataset utility functions."""
+
 from os import walk
 from os.path import join
 from importlib import import_module
@@ -30,13 +31,14 @@ COLLATE_USING = {
 
 
 def load_label_to_result(path: str) -> Dict[int, str]:
-    "Read in label_to_result JSON."
+    """Read in label_to_result JSON."""
     return {int(label): result for label, result in json_load(
         open(path, encoding='utf-8')).items()}
 
 
 class GraphData(NamedTuple):
-    "Holds all data relevant to a cell graph instance."
+    """Data relevant to a cell graph instance."""
+
     graph: DGLGraph
     label: int
     name: str
@@ -48,8 +50,7 @@ def load_cell_graphs(graph_path: str,
                      train: bool = True,
                      validation: bool = True,
                      test: bool = True) -> List[GraphData]:
-    "Load cell graphs. Must be in graph_path/<set>/<specimen>/<graph>.bin form."
-
+    """Load cell graphs. Must be in graph_path/<set>/<specimen>/<graph>.bin form."""
     which_sets: Set[Literal['train', 'validation', 'test']] = set()
     if train:
         which_sets.add('train')
@@ -77,7 +78,7 @@ def load_cell_graphs(graph_path: str,
 
 
 def load_graph(graph_path) -> Tuple[DGLGraph, int]:
-    "Load a single graph saved in the odd histocartography method."
+    """Load a single graph saved in the odd histocartography method."""
     graph_packet = load_graphs(graph_path)
     return graph_packet[0][0], graph_packet[1]['label'].item()
 
@@ -91,8 +92,7 @@ class CGDataset(Dataset):
         cell_graph_labels: Optional[List[int]] = None,
         load_in_ram: bool = False
     ):
-        """
-        Cell graph dataset constructor.
+        """Cell graph dataset constructor.
 
         Args:
             cell_graphs (Tuple[List[DGLGraph], List[int]]):
@@ -107,8 +107,8 @@ class CGDataset(Dataset):
         self.load_in_ram = load_in_ram
 
     def __getitem__(self, index):
-        """
-        Get an example.
+        """Get an example.
+
         Args:
             index (int): index of the example.
         """
@@ -129,7 +129,7 @@ def instantiate_model(cell_graphs: Tuple[List[DGLGraph], List[int]],
                                                       Any] = DEFAULT_CLASSIFICATION_PARAMETERS,
                       model_checkpoint_path: Optional[str] = None
                       ) -> CellGraphModel:
-    "Returns a model set up as specified."
+    """Return a model set up as specified."""
     model = CellGraphModel(
         gnn_params=gnn_parameters,
         classification_params=classification_parameters,
@@ -142,15 +142,14 @@ def instantiate_model(cell_graphs: Tuple[List[DGLGraph], List[int]],
 
 
 def collate(example_batch):
-    """
-    Collate a batch.
+    """Collate a batch.
+
     Args:
         example_batch (torch.tensor): a batch of examples.
     Returns:
         data: (tuple)
         labels: (torch.LongTensor)
     """
-
     # collate the data
     if isinstance(example_batch[0], tuple):  # graph and label
         def collate_fn(batch, id, type):
@@ -163,7 +162,7 @@ def collate(example_batch):
 
 
 def dynamic_import_from(source_file: str, class_name: str) -> Any:
-    """Do a from source_file import class_name dynamically
+    """Import class_name from source_file dynamically.
 
     Args:
         source_file (str): Where to import from
@@ -177,6 +176,7 @@ def dynamic_import_from(source_file: str, class_name: str) -> Any:
 
 
 def signal_last(input_iterable: Iterable[Any]) -> Iterable[Tuple[bool, Any]]:
+    """Signal the last element of an iterable."""
     iterable = iter(input_iterable)
     return_value = next(iterable)
     for value in iterable:
@@ -186,8 +186,10 @@ def signal_last(input_iterable: Iterable[Any]) -> Iterable[Tuple[bool, Any]]:
 
 
 def copy_graph(x):
+    """Copy a graph."""
     return deepcopy(x)
 
 
 def torch_to_numpy(x):
+    """Convert a torch tensor to a numpy array."""
     return x.cpu().detach().numpy()

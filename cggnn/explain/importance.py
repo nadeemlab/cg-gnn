@@ -1,8 +1,9 @@
 """
-Caculate importance scores per node in an ROI.
+Calculate importance scores per node in an ROI.
 
 As used in:
-"Quantifying Explainers of Graph Neural Networks in Computational Pathology", Jaume et al, CVPR, 2021.
+"Quantifying Explainers of Graph Neural Networks in Computational Pathology",
+    Jaume et al, CVPR, 2021.
 """
 
 from typing import List
@@ -26,8 +27,7 @@ def calculate_importance(cell_graphs: List[DGLGraph],
                          model: CellGraphModel,
                          explainer_model: str
                          ) -> List[DGLGraph]:
-    "Calculate the importance for all cells in every graph."
-
+    """Calculate the importance for all cells in every graph."""
     # Define the explainer
     explainer: BaseExplainer
     explainer_model = explainer_model.lower().strip()

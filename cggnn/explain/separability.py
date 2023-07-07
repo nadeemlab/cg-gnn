@@ -2,7 +2,8 @@
 Explain a cell graph (CG) prediction using a pretrained CG-GNN and a graph explainer.
 
 As used in:
-"Quantifying Explainers of Graph Neural Networks in Computational Pathology", Jaume et al, CVPR, 2021.
+"Quantifying Explainers of Graph Neural Networks in Computational Pathology",
+    Jaume et al, CVPR, 2021.
 """
 
 from os import makedirs
@@ -34,20 +35,20 @@ DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
 
 
 class AttributeSeparability:
+    """Process and show the separability between attributes in the model."""
+
     def __init__(
         self,
         classes: List[int],
         keep_nuclei: List[int] = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
     ) -> None:
-        """
-        AttributeSeparability constructor.
+        """Construct an instance of AttributeSeparability.
 
         Args:
             classes (List[int]): Classifications.
             keep_nuclei (List[int]): Number of nuclei to retain each time.
                                      Default to [5, 10, 15, 20, 25, 30, 35, 40, 45, 50].
         """
-
         self.keep_nuclei_list = keep_nuclei
         self.n_keep_nuclei = len(self.keep_nuclei_list)
         self.classes = classes
@@ -64,15 +65,13 @@ class AttributeSeparability:
     ) -> Tuple[Dict[Tuple[int, int], Dict[str, float]],
                Dict[int, Dict[int, ndarray]],
                Dict[Tuple[int, int], Dict[int, Tuple[int, float]]]]:
-        """
-        Derive metrics based on the explainer importance scores and nuclei-level concepts.
+        """Derive metrics based on the explainer importance scores and nuclei-level concepts.
 
         Args:
             importance_list (List[ndarray]): Cell importance scores output by explainers.
             attribute_list (List[ndarray]): Cell-level attributes (later grouped into concepts).
             label_list (List[int]): Labels.
         """
-
         # 1. extract number of concepts
         n_attrs = attribute_list[0].shape[1]
 
@@ -119,8 +118,7 @@ class AttributeSeparability:
         all_histograms: Dict,
         n_attr: int
     ) -> ndarray:
-        """
-        Compute all the pair-wise histogram distances.
+        """Compute all the pair-wise histogram distances.
 
         Args:
              all_histograms (Dict): all the histograms.
@@ -148,8 +146,7 @@ class AttributeSeparability:
         label_list: List[int],
         n_attrs: int
     ) -> Dict[int, Dict[int, ndarray]]:
-        """
-        Compute histograms for all the attributes.
+        """Compute histograms for all the attributes.
 
         Args:
             importance_list (List[ndarray]): Cell importance scores output by explainers.
@@ -192,8 +189,7 @@ class AttributeSeparability:
 
     @staticmethod
     def normalize_node_importance(node_importance: List[ndarray]) -> List[ndarray]:
-        """
-        Normalize node importance. Min-max normalization on each sample.
+        """Normalize node importance. Min-max normalization on each sample.
 
         Args:
             node_importance (List[ndarray]): node importance output by an explainer.
@@ -205,8 +201,7 @@ class AttributeSeparability:
 
     @staticmethod
     def build_hist(concept_values: ndarray, num_bins: int = 100) -> ndarray:
-        """
-        Build a 1D histogram using the concept_values.
+        """Build a 1D histogram using the concept_values.
 
         Args:
             concept_values (ndarray): All the nuclei-level values for a concept.
@@ -220,14 +215,14 @@ class AttributeSeparability:
 
 
 class SeparabilityAggregator:
+    """Aggregation of separability metrics."""
 
     def __init__(
         self,
         separability_scores: Dict[Tuple[int, int], Dict[str, float]],
         concept_grouping: Dict[str, List[str]]
     ) -> None:
-        """
-            SeparabilityAggregator constructor.
+        """Construct an instance of SeparabilityAggregator.
 
         Args:
             separability_score (Dict[Dict][float]): Separability score for all the class pairs
@@ -240,9 +235,7 @@ class SeparabilityAggregator:
                                    sep_scores: Dict[Tuple[int, int], Dict[str, float]],
                                    concept_grouping: Dict[str, List[str]]
                                    ) -> Dict[Tuple[int, int], Dict[str, float]]:
-        """
-        Group the individual attribute-wise separability scores according
-        to the grouping concept.
+        """Group the individual attribute-wise separability scores according to the given concepts.
 
         Args:
             sep_scores (Dict[Tuple[int, int], Dict[str, float]]): Separability scores
@@ -259,10 +252,9 @@ class SeparabilityAggregator:
                 grouped_sep_scores[class_pair][concept_key] = val
         return grouped_sep_scores
 
-    def compute_max_separability_score(self, risk: ndarray) -> Dict[Union[Tuple[int, int], str], float]:
-        """
-        Compute maximum separability score for each class pair. Then the
-        aggregate max sep score w/ and w/o risk.
+    def compute_max_separability_score(self, risk: ndarray) -> Dict[Union[Tuple[int, int], str],
+                                                                    float]:
+        """Compute max separability score for each class pair and aggregate w/ and w/o risk.
 
         Returns:
             max_sep_score (Dict[Union[Tuple[int, int], str], float]): Maximum separability score.
@@ -279,10 +271,9 @@ class SeparabilityAggregator:
             [val for key, val in max_sep_score.items() if isinstance(key, tuple)])
         return max_sep_score
 
-    def compute_average_separability_score(self, risk: ndarray) -> Dict[Union[Tuple[int, int], str], float]:
-        """
-        Compute average separability score for each class pair. Then the
-        aggregate avg sep score w/ and w/o risk.
+    def compute_average_separability_score(self, risk: ndarray) -> Dict[Union[Tuple[int, int],
+                                                                              str], float]:
+        """Compute average separability score for each class pair and aggregate w/ and w/o risk.
 
         Returns:
             avg_sep_score (Dict[Union[Tuple[int, int], str], float]): Average separability score.
@@ -303,12 +294,10 @@ class SeparabilityAggregator:
                                                risk: ndarray,
                                                pathological_prior: ndarray
                                                ) -> Dict[Union[Tuple[int, int], str], float]:
-        """
-        Compute correlation separability score between the prior
-        and the concept-wise separability scores.
+        """Compute correlation separability score between the prior and the concept-wise scores.
 
         Returns:
-            corr_sep_score (Dict[Union[Tuple[int, int], str], float]): Correlation separability score.
+            corr_sep_score (Dict[Union[Tuple[int, int], str], float]): Correlation sep score.
         """
         sep_scores = DataFrame.from_dict(
             self.separability_scores).to_numpy()
@@ -334,8 +323,7 @@ def plot_histogram(all_histograms: Dict[int, Dict[int, ndarray]],
                    attr_name: str,
                    k: int = 25,
                    smoothing=True) -> None:
-    "Create histogram for a single attribute."
-
+    """Create histogram for a single attribute."""
     x = array(list(range(100)))
     for i, histogram in all_histograms[k].items():
         plot(x, uniform_filter1d(
@@ -351,7 +339,7 @@ def _misclassified(cell_graphs: List[DGLGraph],
                    cell_graph_labels: List[int],
                    model: CellGraphModel
                    ) -> List[bool]:
-    "Identify which samples are misclassified."
+    """Identify which samples are misclassified."""
     return (array(cell_graph_labels) == infer_with_model(model, cell_graphs)).tolist()
 
 
@@ -366,8 +354,7 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
                            pathological_prior: Optional[ndarray] = None,
                            out_directory: Optional[str] = None
                            ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame]]:
-    "Generate separability scores for each concept."
-
+    """Generate separability scores for each concept."""
     # Get the importance scores, labels, features, and phenotypes from all cell graphs
     importance_scores = [graph.ndata[IMPORTANCES]
                          for graph in cell_graphs_and_labels[0]]

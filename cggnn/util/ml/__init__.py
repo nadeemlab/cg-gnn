@@ -1,3 +1,5 @@
+"""GNN model for cell (and potentially tissue) graphs."""
+
 from .layers.dense_gin_layer import DenseGINLayer
 from .layers.gin_layer import GINLayer
 from .layers.pna_layer import PNALayer

@@ -1,4 +1,4 @@
-"Generates graph from saved SPT files."
+"""Generates graph from saved SPT files."""
 from argparse import ArgumentParser
 
 from pandas import read_hdf
@@ -7,7 +7,7 @@ from cggnn.generate_graph_from_spt import generate_graphs
 
 
 def parse_arguments():
-    "Process command line arguments."
+    """Process command line arguments."""
     parser = ArgumentParser()
     parser.add_argument(
         '--spt_hdf_cell_filename',

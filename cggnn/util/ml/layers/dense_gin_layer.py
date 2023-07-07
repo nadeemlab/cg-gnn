@@ -1,7 +1,7 @@
-"""
-Implementation of a Dense GIN (Graph Isomorphism Network) layer. This implementation should be used
-when the input graph(s) can only be represented as an adjacency (typically when dealing with dense
-adjacency matrices).
+"""Implementation of a Dense GIN (Graph Isomorphism Network) layer.
+
+This implementation should be used when the input graph(s) can only be represented as an adjacency
+(typically when dealing with dense adjacency matrices).
 
 Original paper:
     - How Powerful are Graph Neural Networks: https://arxiv.org/abs/1810.00826
@@ -17,6 +17,7 @@ from .mlp import MLP
 
 
 class DenseGINLayer(nn.Module):
+    """Dense GIN (Graph Isomorphism Network) layer."""
 
     def __init__(
             self,
@@ -30,8 +31,7 @@ class DenseGINLayer(nn.Module):
             with_lrp: bool = False,
             dropout: float = 0.,
             verbose: bool = False) -> None:
-        """
-        Dense GIN Layer constructor
+        """Construct a dense GIN Layer.
 
         Args:
             node_dim (int): Input dimension of each node.
@@ -45,7 +45,6 @@ class DenseGINLayer(nn.Module):
             dropout (float): If we should use dropout. Defaults to 0.
             verbose (bool): Verbosity. Defaults to False.
         """
-
         super().__init__()
 
         if verbose:
@@ -65,16 +64,15 @@ class DenseGINLayer(nn.Module):
             verbose=verbose)
 
     def forward(self, adj, h):
-        """
-        Forward-pass of a Dense GIN layer.
+        """Forward-pass of a Dense GIN layer.
+
         :param g: DGLGraph object. Node features in GNN_NODE_FEAT_IN_KEY
         :return: updated node features
         """
-
         if isinstance(adj, dgl.DGLGraph):
             adj = dgl.unbatch(adj)
-            assert(
-                len(adj) == 1), "Batch size must be equal to 1 for processing Dense GIN Layers"
+            assert (len(adj) == 1), \
+                "Batch size must be equal to 1 for processing Dense GIN Layers"
             adj = adj[0].adjacency_matrix().to_dense().unsqueeze(
                 dim=0).to(
                 h.device)

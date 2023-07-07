@@ -1,22 +1,22 @@
-"""
-    PNA: Principal Neighbourhood Aggregation
-    Gabriele Corso, Luca Cavalleri, Dominique Beaini, Pietro Lio, Petar Velickovic
+"""PNA: Principal Neighbourhood Aggregation.
+
+Gabriele Corso, Luca Cavalleri, Dominique Beaini, Pietro Lio, Petar Velickovic
     https://arxiv.org/abs/2004.05718
 """
 
 import itertools
 import math
 import numpy as np
-import dgl
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .constants import AGGREGATORS, SCALERS, GNN_NODE_FEAT_IN, GNN_EDGE_FEAT
+from .constants import AGGREGATORS, SCALERS, GNN_NODE_FEAT_IN
 from .mlp import MLP
 
 
 class PNALayer(nn.Module):
+    """Principle neighborhood aggregation (PNA) layer."""
 
     def __init__(self,
                  node_dim,
@@ -34,22 +34,27 @@ class PNALayer(nn.Module):
                  residual: bool = True,
                  verbose=False
                  ):
-        """
-        PNA layer constructor.
+        """PNA layer constructor.
 
         Args:
             node_dim (int): Input dimension of each node.
             out_dim (int): Output dimension of each node.
-            aggregators (str): Set of aggregation function identifiers. Default to "mean max min std".
-            scalers (str): Set of scaling functions identifiers. Default to "identity amplification attenuation".
-            avg_d (int): Average degree of nodes in the training set, used by scalers to normalize. Default to 5.
+            aggregators (str): Set of aggregation function identifiers.
+                Default to "mean max min std".
+            scalers (str): Set of scaling functions identifiers.
+                Default to "identity amplification attenuation".
+            avg_d (int): Average degree of nodes in the training set, used by scalers to normalize.
+                Default to 5.
             dropout (float): Dropout used. Default to 0.
             graph_norm (bool): Whether to use graph normalisation. Default to False.
             batch_norm (bool): Whether to use batch normalisation. Default to False.
             towers: Number of towers to use. Default to 1.
-            pretrans_layers: Number of layers in the transformation before the aggregation. Default to 1.
-            posttrans_layers: Number of layers in the transformation after the aggregation. Default to 1.
-            divide_input: Whether the input features should be split between towers or not. Default to True.
+            pretrans_layers: Number of layers in the transformation before the aggregation.
+                Default to 1.
+            posttrans_layers: Number of layers in the transformation after the aggregation.
+                Default to 1.
+            divide_input: Whether the input features should be split between towers or not.
+                Default to True.
             residual: Whether to add a residual connection. Default to True.
             verbose (bool): Verbosity. Default to False.
         """
@@ -100,6 +105,7 @@ class PNALayer(nn.Module):
         )
 
     def forward(self, g, h):
+        """Forward pass."""
         h_in = h  # for residual connection
 
         if self.divide_input:
@@ -115,7 +121,8 @@ class PNALayer(nn.Module):
             h_out = h_in + h_out  # residual connection
         return h_out
 
-    def set_rlp(self, with_rlp):
+    def set_lrp(self, with_lrp):
+        """Set LRP function."""
         raise NotImplementedError(
             'LRP not implemented for PNA layers. Use a GIN-based model.')
 
@@ -126,6 +133,8 @@ def __repr__(self):
 
 
 class PNATower(nn.Module):
+    """PNA tower."""
+
     def __init__(
             self,
             in_dim,
@@ -138,6 +147,7 @@ class PNATower(nn.Module):
             avg_d,
             pretrans_layers,
             posttrans_layers):
+        """Create a PNA tower."""
         super().__init__()
         self.dropout = dropout
         self.graph_norm = graph_norm
@@ -172,14 +182,17 @@ class PNATower(nn.Module):
         self.avg_d = avg_d
 
     def pretrans_edges(self, edges):
+        """Apply pretransformation on edges."""
         z2 = torch.cat([edges.src[GNN_NODE_FEAT_IN],
                         edges.dst[GNN_NODE_FEAT_IN]], dim=1)
         return {'e': self.pretrans(z2)}
 
     def message_func(self, edges):
+        """Apply message function."""
         return {'e': edges.data['e']}
 
     def reduce_func(self, nodes):
+        """Apply reduce function."""
         h = nodes.mailbox['e']
         D = h.shape[-2]
         h = torch.cat([aggregate(h) for aggregate in self.aggregators], dim=1)
@@ -188,9 +201,11 @@ class PNATower(nn.Module):
         return {GNN_NODE_FEAT_IN: h}
 
     def posttrans_nodes(self, nodes):
+        """Apply posttransformation on nodes."""
         return self.posttrans(nodes.data[GNN_NODE_FEAT_IN])
 
     def forward(self, g, h):
+        """Forward pass."""
         g.ndata[GNN_NODE_FEAT_IN] = h
 
         # pretransformation
@@ -209,7 +224,8 @@ class PNATower(nn.Module):
                 num_nodes = g.batch_num_nodes().tolist()
             else:
                 num_nodes = [g.number_of_nodes()]
-            snorm_n = torch.FloatTensor(list(itertools.chain(*[[np.sqrt(1 / n)] * n for n in num_nodes]))).to(h.device)
+            snorm_n = torch.FloatTensor(list(itertools.chain(
+                *[[np.sqrt(1 / n)] * n for n in num_nodes]))).to(h.device)
             h = h * snorm_n[:, None]
         if self.batch_norm:
             h = self.batchnorm_h(h)

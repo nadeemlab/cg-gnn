@@ -1,4 +1,5 @@
-"""Pipeline utilities"""
+"""Pipeline utilities."""
+
 import logging
 import multiprocessing
 import os
@@ -17,7 +18,7 @@ from .util import dynamic_import_from, signal_last
 
 
 class PipelineStep(ABC):
-    """Base pipelines step"""
+    """Base pipelines step abstract class that helps with saving and loading precomputed results."""
 
     def __init__(
         self,
@@ -26,7 +27,7 @@ class PipelineStep(ABC):
         link_path: Union[None, str, Path] = None,
         precompute_path: Union[None, str, Path] = None,
     ) -> None:
-        """Abstract class that helps with saving and loading precomputed results
+        """Create a pipeline step.
 
         Args:
             save_path (Union[None, str, Path], optional): Base path to save results to.
@@ -75,7 +76,7 @@ class PipelineStep(ABC):
         )
 
     def _mkdir(self) -> None:
-        """Create path to output files"""
+        """Create path to output files."""
         assert (
             self.save_path is not None
         ), "Can only create directory if base_path was not None when constructing the object"
@@ -92,9 +93,8 @@ class PipelineStep(ABC):
                 link_directory).parent.resolve() == Path(self.output_dir):
             logging.info("Link to self skipped")
             return
-        assert (
-            self.save_path is not None
-        ), f"Linking only supported when saving is enabled, i.e. when save_path is passed in the constructor."
+        assert (self.save_path is not None), "Linking only supported when saving is enabled, "\
+            "i.e., when save_path is passed in the constructor."
         if os.path.islink(link_directory):
             if os.path.exists(link_directory):
                 logging.info("Link already exists: overwriting...")
@@ -112,21 +112,23 @@ class PipelineStep(ABC):
         link_path: Union[None, str, Path] = None,
         precompute_path: Union[None, str, Path] = None,
     ) -> None:
-        """Precompute all necessary information for this step
+        """Precompute all necessary information for this step.
 
         Args:
-            link_path (Union[None, str, Path], optional): Path to link the output to. Defaults to None.
-            precompute_path (Union[None, str, Path], optional): Path to load/save the precomputation outputs. Defaults to None.
+            link_path (Union[None, str, Path], optional): Path to link the output to.
+                Defaults to None.
+            precompute_path (Union[None, str, Path], optional): Path to load/save the
+                precomputation outputs. Defaults to None.
         """
-        pass
 
     def process(
         self, *args: Any, output_name: Optional[str] = None, **kwargs: Any
     ) -> Any:
-        """Main process function of the step and outputs the result. Try to saves the output when output_name is passed.
+        """Process the step and output the result. Saves the output when output_name is passed.
 
         Args:
-            output_name (Optional[str], optional): Unique identifier of the passed datapoint. Defaults to None.
+            output_name (Optional[str], optional): Unique identifier of the passed datapoint.
+                Defaults to None.
 
         Returns:
             Any: Result of the pipeline step
@@ -139,14 +141,14 @@ class PipelineStep(ABC):
 
     @abstractmethod
     def _process(self, *args: Any, **kwargs: Any) -> Any:
-        """Abstract method that performs the computation of the pipeline step
+        """Perform pipeline step computation.
 
         Returns:
             Any: Result of the pipeline step
         """
 
     def _get_outputs(self, input_file: h5py.File) -> Union[Any, Tuple]:
-        """Extracts the step output from a given h5 file
+        """Extract the step output from a given .h5 file.
 
         Args:
             input_file (h5py.File): File to load from
@@ -170,7 +172,7 @@ class PipelineStep(ABC):
 
     def _set_outputs(self, output_file: h5py.File,
                      outputs: Union[Tuple, Any]) -> None:
-        """Save the step output to a given h5 file
+        """Save the step output to a given .h5 file.
 
         Args:
             output_file (h5py.File): File to write to
@@ -189,7 +191,7 @@ class PipelineStep(ABC):
     def _process_and_save(
         self, *args: Any, output_name: str, **kwargs: Any
     ) -> Any:
-        """Process and save in the provided path as as .h5 file
+        """Process and save in the provided path as as .h5 file.
 
         Args:
             output_name (str): Unique identifier of the the passed datapoint
@@ -200,13 +202,13 @@ class PipelineStep(ABC):
         Returns:
             Any: Result of the pipeline step
         """
-        assert (
-            self.save_path is not None
-        ), "Can only save intermediate output if base_path was not None when constructing the object"
+        assert (self.save_path is not None), "Can only save intermediate output if base_path was "\
+            "not None when constructing the object"
         output_path = self.output_dir / f"{output_name}.h5"
         if output_path.exists():
             logging.info(
-                f"{self.__class__.__name__}: Output of {output_name} already exists, using it instead of recomputing"
+                "%s: Output of %s already exists, using it instead of recomputing",
+                self.__class__.__name__, output_name
             )
             try:
                 with h5py.File(output_path, "r") as input_file:
@@ -226,6 +228,8 @@ class PipelineStep(ABC):
 
 
 class PipelineRunner:
+    """Runs a pipeline for a given configuration."""
+
     def __init__(
         self,
         output_path: Optional[str] = None,
@@ -235,7 +239,7 @@ class PipelineRunner:
         save_intermediate: bool = False,
         precompute: bool = True,
     ) -> None:
-        """Create a pipeline runner for a given configuration
+        """Create a pipeline runner for a given configuration.
 
         Args:
             output_path (Optional[str], optional): Path to the output and intermediate files.
@@ -243,8 +247,10 @@ class PipelineRunner:
             inputs (Optional[Iterable[str]], optional): Inputs to the pipeline. Defaults to None.
             outputs (Optional[Iterable[str]], optional): Outputs of the pipeline. Defaults to None.
             stages (Iterable[dict], optional): Stages to complete. Defaults to [].
-            save_intermediate (bool, optional): Whether to save the intermediate steps. Defaults to False.
-            precompute (bool, optional): Whether to perform the precomputation steps. Defaults to True.
+            save_intermediate (bool, optional): Whether to save the intermediate steps.
+                Defaults to False.
+            precompute (bool, optional): Whether to perform the precomputation steps.
+                Defaults to True.
         """
         self.inputs = [] if inputs is None else inputs
         self.outputs = [] if outputs is None else outputs
@@ -271,7 +277,7 @@ class PipelineRunner:
             if requires_saving:
                 assert (
                     self.stages[-1].save_path is not None
-                ), f"Cannot update nested path if no save path is defined"
+                ), "Cannot update nested path if no save path is defined"
                 path = str(self.stages[-1].output_dir)
         self.final_path = path
         if precompute:
@@ -303,19 +309,19 @@ class PipelineRunner:
     def run(
         self, output_name: Optional[str] = None, **inputs: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Run the preprocessing pipeline for a given name and input parameters and return the specified outputs
+        """Run pipeline for a given name and input parameters and return specified outputs.
 
         Args:
-            output_name (Optional[str], optional): Unique identifier of the datapoint. Defaults to None.
+            output_name (Optional[str], optional): Unique identifier of the datapoint.
+                Defaults to None.
 
         Returns:
             Dict[str, Any]: Output of the pipeline as defined in the configuration
         """
-
         # Validate inputs
         assert (
             output_name is None or self.final_path is not None
-        ), f"Saving is only possible when output_path has been passed to the constructor."
+        ), "Saving is only possible when output_path has been passed to the constructor."
         for input_name in self.inputs:
             assert input_name in inputs, f"{input_name} not found in keyword arguments"
 
@@ -327,8 +333,9 @@ class PipelineRunner:
             if not isinstance(step_output, tuple):
                 step_output = tuple([step_output])
             assert len(step_output) == len(config.get("outputs", [])), (
-                f"Number of outputs in config mismatches actual number of outputs in {stage.__class__.__name__}"
-                f"Got {len(step_output)} outputs of type {list(map(type, step_output))},"
+                "Number of outputs in config mismatches actual number of outputs in "
+                f"{stage.__class__.__name__}.\n"
+                f"Got {len(step_output)} outputs of type {list(map(type, step_output))}, "
                 f"but expected {len(config.get('outputs', []))} outputs"
             )
             for key, value in zip(config.get("outputs", []), step_output):
@@ -343,25 +350,28 @@ class PipelineRunner:
 
 
 class BatchPipelineRunner:
+    """Batch pipeline runner, for multiple inputs with multiprocessing support."""
+
     def __init__(
         self,
         pipeline_config: Dict[str, Any],
         save_path: Optional[str],
         save_intermediate: bool = False,
     ) -> None:
-        """Run Helper that runs the pipeline for multiple inputs with multiprocessing support
+        """Run helper.
 
         Args:
             pipeline_config (Dict[str, Any]): Configuration of the pipeline
             save_path (Optional[str]): Path to save the outputs to
-            save_intermediate (bool, optional): Whether to save intermediate outputs. Defaults to False.
+            save_intermediate (bool, optional): Whether to save intermediate outputs.
+                Defaults to False.
         """
         self.pipeline_config = pipeline_config
         self.save_path = save_path
         self.save_intermediate = save_intermediate
 
     def _build_pipeline_runner(self) -> PipelineRunner:
-        """Builds and returns a PipelineRunner with the correct configuration
+        """Build and return a PipelineRunner with the correct configuration.
 
         Returns:
             PipelineRunner: Runner object
@@ -375,7 +385,7 @@ class BatchPipelineRunner:
         )
 
     def _worker_task(self, data: Tuple[Any, pd.core.series.Series]) -> None:
-        """Runs the task of a single worker
+        """Run the task of a single worker.
 
         Args:
             data (Tuple[Any, pd.core.series.Series]): The index and row of the dataframe,
@@ -391,8 +401,9 @@ class BatchPipelineRunner:
         pipeline.run(output_name=name, **row)
 
     def link_output(self, link_directory: str) -> None:
-        """Creates a symlink between the output directory of the pipeline and the provided path.
-           Overwrites link if it already exists.
+        """Create a symlink between the output directory of the pipeline and the provided path.
+
+        Overwrites link if it already exists.
 
         Args:
             link_directory (str): Path to link the output directory to
@@ -412,30 +423,30 @@ class BatchPipelineRunner:
                 )
                 return
         os.symlink(final_path, link_directory, target_is_directory=True)
-        logging.info(f"Created symlink: {link_directory} -> {final_path}")
+        logging.info("Created symlink: %s -> %s", link_directory,  final_path)
 
     def precompute(self) -> None:
-        """Precompute all necessary information for all stages"""
+        """Precompute all necessary information for all stages."""
         tmp_runner = self._build_pipeline_runner()
         tmp_runner.precompute(self.save_intermediate)
 
     def run(
         self, metadata: pd.DataFrame, cores: int = 1, return_out: bool = False
     ) -> Optional[Dict[str, Dict[str, Any]]]:
-        """Runs the pipeline for the provided metadata dataframe and a specified
-           number of cores for multiprocessing.
-           Does not support saving of outputs
+        """Run the pipeline for the provided metadata dataframe and a specified number of cores.
+
+        Does not support saving of outputs.
 
         Args:
             metadata (pd.DataFrame): Dataframe with the columns as defined in the config inputs
             cores (int, optional): Number of cores to use for multiprocessing. Defaults to 1.
             return_out (bool, optional): If the method should also return the output batch data.
-                If True, make sure you have enough memory. Only supported
-                for single-core processing. Default to False.
+                If True, make sure you have enough memory. Only supported for single-core
+                processing. Default to False.
 
         Returns:
-            batched_out (Optional[Dict[str, Dict[str, Any]]]): If return_out is True, returns the processed output.
-                Otherwise returns None
+            batched_out (Optional[Dict[str, Dict[str, Any]]]): If return_out is True, returns the
+                processed output. Otherwise returns None.
         """
         assert not (
             return_out and cores > 1

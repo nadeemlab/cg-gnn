@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""
-Train CG-GNN models
-"""
+"""Train CG-GNN models."""
+
 from os import makedirs, listdir
 from os.path import exists, join
-from shutil import rmtree
 from typing import Callable, List, Tuple, Optional, Any, Sequence, Dict
 
 from numpy import ndarray, array
@@ -28,7 +26,7 @@ DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
 
 
 def _set_save_path(model_path: str) -> str:
-    "Generate model path if we need to duplicate it and set path to save checkpoints."
+    """Generate model path if we need to duplicate it and set path to save checkpoints."""
     if exists(model_path):
         increment = 2
         while exists(model_path + f'_{increment}'):
@@ -42,7 +40,7 @@ def _create_dataset(cell_graphs: List[DGLGraph],
                     cell_graph_labels: Optional[List[int]] = None,
                     in_ram: bool = True
                     ) -> Optional[CGDataset]:
-    "Make a cell graph dataset."
+    """Make a cell graph dataset."""
     return CGDataset(cell_graphs, cell_graph_labels, load_in_ram=in_ram) \
         if (len(cell_graphs) > 0) else None
 
@@ -54,8 +52,7 @@ def _create_datasets(
     in_ram: bool = True,
     k_folds: int = 3
 ) -> Tuple[CGDataset, Optional[CGDataset], Optional[CGDataset], Optional[KFold]]:
-    "Make the cell and/or tissue graph datasets and the k-fold if necessary."
-
+    """Make the cell and/or tissue graph datasets and the k-fold if necessary."""
     train_dataset = _create_dataset(
         cell_graph_sets[0][0], cell_graph_sets[0][1], in_ram)
     assert train_dataset is not None
@@ -82,7 +79,7 @@ def _create_training_dataloaders(train_ids: Optional[Sequence[int]],
                                  validation_dataset: Optional[CGDataset],
                                  batch_size: int
                                  ) -> Tuple[DataLoader, DataLoader]:
-    "Determine whether to k-fold and then create dataloaders."
+    """Determine whether to k-fold and then create dataloaders."""
     if (train_ids is None) or (test_ids is None):
         if validation_dataset is None:
             raise ValueError("validation_dataset must exist.")
@@ -128,8 +125,7 @@ def _train_step(model: CellGraphModel,
                 fold: int,
                 step: int
                 ) -> Tuple[CellGraphModel, int]:
-    "Train for 1 epoch/fold."
-
+    """Train for 1 epoch/fold."""
     model.train()
     for batch in tqdm(train_dataloader, desc=f'Epoch training {epoch}, fold {fold}', unit='batch'):
 
@@ -161,8 +157,7 @@ def _validation_step(model: CellGraphModel,
                      best_validation_accuracy: float,
                      best_validation_weighted_f1_score: float
                      ) -> CellGraphModel:
-    "Run validation step."
-
+    """Run validation step."""
     model.eval()
     all_validation_logits = []
     all_validation_labels = []
@@ -298,8 +293,7 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
           classification_parameters: Dict[str,
                                           Any] = DEFAULT_CLASSIFICATION_PARAMETERS
           ) -> CellGraphModel:
-    "Train CG-GNN."
-
+    """Train CG-GNN."""
     # set path to save checkpoints
     save_path = _set_save_path(save_path)
 
@@ -360,8 +354,7 @@ def infer_with_model(model: CellGraphModel,
                      batch_size: int = 1,
                      return_probability: bool = False
                      ) -> ndarray:
-    "Given a model, infer their classes."
-
+    """Given a model, infer their classes."""
     model = model.eval()
 
     # make test data loader
@@ -389,12 +382,11 @@ def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
           classification_params: Dict[str,
                                       Any] = DEFAULT_CLASSIFICATION_PARAMETERS
           ) -> None:
-    """
-    Test CG-GNN.
+    """Test CG-GNN.
+
     Args:
         args (Namespace): parsed arguments.
     """
-
     # declare model and load weights
     model = instantiate_model(cell_graphs,
                               gnn_parameters=gnn_params,

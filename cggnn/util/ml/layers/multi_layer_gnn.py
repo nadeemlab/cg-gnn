@@ -1,3 +1,5 @@
+"""A GNN with multiple layers."""
+
 import torch
 import torch.nn as nn
 import importlib
@@ -11,9 +13,7 @@ from .constants import (
 
 
 class MultiLayerGNN(nn.Module):
-    """
-    MultiLayer network that concatenates several gnn layers.
-    """
+    """MultiLayer network that concatenates several GNN layers."""
 
     def __init__(
         self,
@@ -25,18 +25,17 @@ class MultiLayerGNN(nn.Module):
         readout_type="mean",
         **kwargs
     ) -> None:
-        """
-        MultiLayer GNN constructor.
+        """Construct a multiLayer GNN.
 
         Args:
             layer_type (str): GNN layer type. Default to "gin_layer".
             input_dim (int): Input dimension of the node features. Default to None.
             output_dim (int): Output dimension of the node embeddings. Default to 32.
             num_layers (int): Number of GNN layers. Default to 3.
-            readout_op (str): How the intermediate node embeddings are aggregated. Default to "concat".
+            readout_op (str): How the intermediate node embeddings are aggregated. Defaults to
+                "concat".
             readout_type (str): Global node pooling operation. Default to "mean".
         """
-
         assert input_dim is not None, "Please provide input node dimensions."
 
         super(MultiLayerGNN, self).__init__()
@@ -98,8 +97,8 @@ class MultiLayerGNN(nn.Module):
             setattr(self, arg, val)
 
     def forward(self, g, h, with_readout=True):
-        """
-        Forward pass.
+        """Forward pass.
+
         :param g: (DGLGraph)
         :param h: (FloatTensor)
         :param cat: (bool) if concat the features at each conv layer
@@ -149,10 +148,12 @@ class MultiLayerGNN(nn.Module):
             return h
 
     def set_lrp(self, with_lrp):
+        """Set LRP."""
         for layer in self.layers:
             layer.set_lrp(with_lrp)
 
     def lrp(self, relevance_score):
+        """Find LRP of relevance score."""
         for layer_id in range(len(self.layers) - 1, -1, -1):
             relevance_score = self.layers[layer_id].lrp(relevance_score)
         return relevance_score

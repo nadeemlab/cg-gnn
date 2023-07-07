@@ -1,7 +1,4 @@
-"""
-Given the importance scores for cells per ROI in a specimen, find an importance score on the same
-scale for all cells in ROIs across the entire specimen.
-"""
+"""Unify importance scores for cells from different ROIs into a single score."""
 
 from typing import Dict, List, Tuple, DefaultDict
 
@@ -15,7 +12,7 @@ from cggnn.train import infer_with_model
 
 
 def unify_importance(graphs: List[DGLGraph], model: CellGraphModel) -> Dict[int, float]:
-    "Merge the importance values for all cells in a single specimen."
+    """Merge the importance values for each cell in a specimen."""
     probs = infer_with_model(model, graphs, return_probability=True)
     hs_id_to_importances: Dict[int,
                                List[Tuple[float, float]]] = DefaultDict(list)
@@ -32,7 +29,7 @@ def unify_importance(graphs: List[DGLGraph], model: CellGraphModel) -> Dict[int,
 
 def unify_importance_across(graphs_by_specimen: List[List[DGLGraph]],
                             model: CellGraphModel) -> Dict[int, float]:
-    "Merge importance values for all cells in all ROIs in all specimens."
+    """Merge importance values for all cells in all ROIs in all specimens."""
     hs_id_to_importance: Dict[int, float] = {}
     for graphs in graphs_by_specimen:
         for hs_id, importance in unify_importance(graphs, model).items():
@@ -44,7 +41,7 @@ def unify_importance_across(graphs_by_specimen: List[List[DGLGraph]],
 
 
 def save_importances(hs_id_to_importance: Dict[int, float], out_directory: str) -> None:
-    "Save importance scores per histological structure to CSV."
+    """Save importance scores per histological structure to CSV."""
     s = Series(hs_id_to_importance).sort_index()
     s.name = 'importance'
     s.to_csv(out_directory)
