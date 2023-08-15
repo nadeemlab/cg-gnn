@@ -30,7 +30,7 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--cell_data_hdf_path',
+        '--spt_hdf_cell_filename',
         type=str,
         help='Where to find the data for cells to lookup feature and phenotype names.',
         required=True

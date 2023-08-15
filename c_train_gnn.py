@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Script for training CG-GNN, TG-GNN, and HACT models."""
 
 from argparse import ArgumentParser
@@ -16,44 +15,41 @@ def parse_arguments():
     parser.add_argument(
         '--cg_path',
         type=str,
-        help='path to the cell graphs.'
+        help='Path to the cell graphs.',
+        required=True
     )
     parser.add_argument(
-        '--model_save_path',
+        '--output_directory',
         type=str,
-        help='path to where the model is saved.',
-        default='',
-        required=False
+        help='Directory to save the model subdirectory into.',
+        required=True
     )
     parser.add_argument(
         '--in_ram',
-        help='if the data should be stored in RAM.',
+        help='If the data should be stored in RAM.',
         action='store_true',
     )
     parser.add_argument(
         '-b',
         '--batch_size',
         type=int,
-        help='batch size.',
+        help='Batch size to use during training.',
         default=1,
         required=False
     )
     parser.add_argument(
-        '--epochs', type=int, help='epochs.', default=10, required=False
+        '--epochs',
+        type=int,
+        help='Number of training epochs to do.',
+        default=10,
+        required=False
     )
     parser.add_argument(
         '-l',
         '--learning_rate',
         type=float,
-        help='learning rate.',
+        help='Learning rate to use during training.',
         default=10e-3,
-        required=False
-    )
-    parser.add_argument(
-        '--out_path',
-        type=str,
-        help='path to where the output data are saved (currently only for the interpretability).',
-        default='../../data/graphs',
         required=False
     )
     parser.add_argument(
@@ -87,7 +83,7 @@ if __name__ == "__main__":
         which_set[1].append(gd.label)
 
     train((cg_train, cg_val, cg_test),
-          args.model_save_path,
+          args.output_directory,
           args.in_ram,
           args.epochs,
           args.learning_rate,

@@ -26,7 +26,7 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--out_directory',
+        '--output_directory',
         type=str,
         help='Where to save the output reporting.',
         default=None,
@@ -43,8 +43,9 @@ if __name__ == "__main__":
         cell_graphs_by_specimen[cg.specimen].append(cg.graph)
     hs_id_to_importance = unify_importance_across(
         list(cell_graphs_by_specimen.values()),
-        instantiate_model(([d.graph for d in cell_graphs_data], [d.label for d in cell_graphs_data]),
-                          model_checkpoint_path=args.model_checkpoint_path))
-    if args.out_directory is not None:
+        instantiate_model(
+            ([d.graph for d in cell_graphs_data], [d.label for d in cell_graphs_data]),
+            model_checkpoint_path=args.model_checkpoint_path))
+    if args.output_directory is not None:
         save_importances(hs_id_to_importance, join(
-            args.out_directory, 'importances.csv'))
+            args.output_directory, 'importances.csv'))

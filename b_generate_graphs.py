@@ -52,10 +52,10 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
-        '--save_path',
+        '--output_directory',
         type=str,
-        help='Path to save the cell graphs.',
-        default='data/',
+        help='Directory to save the (sub)directory of graph files to.',
+        default=None,
         required=False
     )
     return parser.parse_args()
@@ -65,4 +65,4 @@ if __name__ == "__main__":
     args = parse_arguments()
     generate_graphs(read_hdf(args.spt_hdf_cell_filename), read_hdf(args.spt_hdf_label_filename),
                     args.validation_data_percent, args.test_data_percent, args.roi_side_length,
-                    args.target_column, args.save_path)
+                    args.target_column, args.output_directory)

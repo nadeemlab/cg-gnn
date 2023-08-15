@@ -1,17 +1,19 @@
 """Generates graph from saved SPT files."""
+
 from os import makedirs, listdir
 from os.path import join, isdir
 from random import shuffle, randint
 from warnings import warn
 from typing import Optional, Tuple, List, Dict, DefaultDict
 
-from torch import Tensor, FloatTensor, IntTensor
+from torch import Tensor, FloatTensor, IntTensor  # pylint: disable=no-name-in-module
 from numpy import ndarray, round, prod, percentile, argmin, nonzero
 from dgl import DGLGraph, graph
 from dgl.data.utils import save_graphs
 from sklearn.neighbors import kneighbors_graph
 from pandas import DataFrame
 from scipy.spatial.distance import pdist, squareform
+from tqdm import tqdm
 
 from cggnn.util import GraphData
 from cggnn.util.constants import CENTROIDS, FEATURES, INDICES, PHENOTYPES, TRAIN_VALIDATION_TEST
@@ -27,11 +29,23 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
                                             Dict[DGLGraph, str]]:
     """Create graphs from cell and label files created from SPT."""
     roi_area = prod(roi_size)
+    labeled_specimens = df_label_all_specimens.index
+
+    labels: ndarray = df_label_all_specimens['result'].unique()
+    if len(labels) == 0:
+        raise ValueError('No specimens have labels.')
+    if len(labels) == 1:
+        raise ValueError('Only one unique label. No point to training.')
 
     # Split the data by specimen (slide)
     graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
     roi_names: Dict[DGLGraph, str] = {}
-    for specimen, df_specimen in df_cell_all_specimens.groupby('specimen'):
+    print('Creating graphs for identified regions in each specimen...')
+    for specimen, df_specimen in tqdm(df_cell_all_specimens.groupby('specimen')):
+
+        # Skip specimens without labels
+        if specimen not in labeled_specimens:
+            continue
 
         # Initialize data structures
         bounding_boxes: List[Tuple[int, int, int, int, int, int]] = []
@@ -77,10 +91,8 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
                                               :][:, cells_not_yet_captured]
 
         # Create feature, centroid, and label arrays and then the graph
-        df_features = df_specimen.loc[:,
-                                      df_specimen.columns.str.startswith('FT_')]
-        df_phenotypes = df_specimen.loc[:,
-                                        df_specimen.columns.str.startswith('PH_')]
+        df_features = df_specimen.loc[:, df_specimen.columns.str.startswith('FT_')]
+        df_phenotypes = df_specimen.loc[:, df_specimen.columns.str.startswith('PH_')]
         for i, (x_min, x_max, y_min, y_max, x, y) in enumerate(bounding_boxes):
             df_roi: DataFrame = df_specimen.loc[df_specimen['center_x'].between(
                 x_min, x_max) & df_specimen['center_y'].between(y_min, y_max), ]
@@ -95,8 +107,7 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
                 f'melanoma_{specimen}_{i}_{roi_size[0]}x{roi_size[1]}_x{x}_y{y}'
 
     # Split the graphs by specimen and label
-    graphs_by_label_and_specimen: Dict[int,
-                                       Dict[str, List[DGLGraph]]] = DefaultDict(dict)
+    graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]]] = DefaultDict(dict)
     for specimen, graphs in graphs_by_specimen.items():
         label = df_label_all_specimens.loc[specimen, 'result']
         graphs_by_label_and_specimen[label][specimen] = graphs
@@ -224,7 +235,7 @@ def _split_rois(graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]
                 if n_test < 0:
                     which_sets.append('test')
                 warn(f'Class {label} doesn\'t have enough specimens to maintain the specified '
-                     f'{"/".join(which_sets)} proportion. Consider adding more samples of this '
+                     f'{"/".join(which_sets)} proportion. Consider adding more specimens of this '
                      'class and/or increasing their allocation percentage.')
 
             # Finish the allocation.
@@ -249,10 +260,9 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
                     test_data_percent: int,
                     roi_side_length: int,
                     target_column: Optional[str] = None,
-                    save_path: Optional[str] = None
+                    output_directory: Optional[str] = None
                     ) -> List[GraphData]:
     """Generate cell graphs from SPT server files and save to disk if requested."""
-    # Handle inputs
     if not 0 <= validation_data_percent < 100:
         raise ValueError(
             "Validation set percentage must be between 0 and 100.")
@@ -266,15 +276,16 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
     p_test: float = test_data_percent/100
     roi_size: Tuple[int, int] = (roi_side_length, roi_side_length)
 
-    if save_path is not None:
-        # Create save directory if it doesn't exist yet
-        makedirs(save_path, exist_ok=True)
+    if output_directory is not None:
+        # Create graph directory if it doesn't exist yet
+        output_directory = join(output_directory, 'graphs')
+        makedirs(output_directory, exist_ok=True)
 
         # Check if work has already been done by checking whether train, validation, and test
         # folders have been created and populated
         set_directories: List[str] = []
         for set_type in TRAIN_VALIDATION_TEST:
-            directory = join(save_path, set_type)
+            directory = join(output_directory, set_type)
             if isdir(directory) and (len(listdir(directory)) > 0):
                 raise RuntimeError(
                     f'{set_type} set directory has already been created. '
@@ -289,15 +300,15 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
             makedirs(directory, exist_ok=True)
 
     # Create the graphs
-    graphs_by_label_and_specimen, graph_names = _create_graphs_from_spt_file(
+    graphs_by_label_and_specimens, graph_names = _create_graphs_from_spt_file(
         df_feat_all_specimens, df_label_all_specimens, roi_size, target_column=target_column)
 
     # Split graphs into train/validation/test sets as requested
-    sets_data = _split_rois(graphs_by_label_and_specimen, p_validation, p_test)
+    sets_data = _split_rois(graphs_by_label_and_specimens, p_validation, p_test)
 
     # Create dict of graph to label
     graph_to_label: Dict[DGLGraph, int] = {}
-    for label, graphs_by_specimen in graphs_by_label_and_specimen.items():
+    for label, graphs_by_specimen in graphs_by_label_and_specimens.items():
         for graph_list in graphs_by_specimen.values():
             for graph_instance in graph_list:
                 graph_to_label[graph_instance] = label
@@ -306,7 +317,7 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
     graphs_data: List[GraphData] = []
     for i, set_data in enumerate(sets_data):
         for specimen, graphs in set_data.items():
-            if save_path is not None:
+            if output_directory is not None:
                 if (len(graphs) > 0) and (len(set_directories) < i):
                     raise RuntimeError(
                         'Created a validation or test entry that shouldn\'t be there.')
@@ -317,7 +328,7 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
                 name = graph_names[graph_instance]
                 graphs_data.append(GraphData(graph_instance, label,
                                              name, specimen, TRAIN_VALIDATION_TEST[i]))
-                if save_path is not None:
+                if output_directory is not None:
                     save_graphs(join(specimen_directory, name + '.bin'),
                                 [graph_instance],
                                 {'label': Tensor([label])})

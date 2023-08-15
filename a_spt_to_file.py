@@ -14,12 +14,6 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--output_name',
-        type=str,
-        help='What to call the resulting CSVs.',
-        required=True
-    )
-    parser.add_argument(
         '--host',
         type=str,
         help='Host SQL server IP.',
@@ -43,10 +37,16 @@ def parse_arguments():
         help='Server login password.',
         required=True
     )
+    parser.add_argument(
+        '--output_directory',
+        type=str,
+        help='Where to create a subdirectory for this study (if not already created).',
+        required=True
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
     spt_to_dataframes(args.study, args.host, args.dbname,
-                      args.user, args.password, args.output_name)
+                      args.user, args.password, args.output_directory)

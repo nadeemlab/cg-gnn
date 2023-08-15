@@ -148,6 +148,7 @@ def generate_interactives(graphs_to_plot: Dict[str, List[DGLGraph]],
                           out_directory: str
                           ) -> None:
     """Create bokeh interactive plots for all graphs in the out_directory."""
+    out_directory = join(out_directory, 'interactives')
     makedirs(out_directory, exist_ok=True)
     for name, dgl_graphs in tqdm(graphs_to_plot.items()):
         graphs = [_convert_dgl_to_networkx(

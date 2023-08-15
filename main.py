@@ -72,18 +72,22 @@ def parse_arguments():
         '-b',
         '--batch_size',
         type=int,
-        help='batch size.',
+        help='Batch size to use during training.',
         default=1,
         required=False
     )
     parser.add_argument(
-        '--epochs', type=int, help='epochs.', default=10, required=False
+        '--epochs',
+        type=int,
+        help='Number of training epochs to do.',
+        default=10,
+        required=False
     )
     parser.add_argument(
         '-l',
         '--learning_rate',
         type=float,
-        help='learning rate.',
+        help='Learning rate to use during training.',
         default=10e-3,
         required=False
     )

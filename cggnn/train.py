@@ -25,15 +25,16 @@ IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
 
 
-def _set_save_path(model_path: str) -> str:
+def _set_save_path(output_directory: str) -> str:
     """Generate model path if we need to duplicate it and set path to save checkpoints."""
-    if exists(model_path):
+    output_directory = join(output_directory, 'model')
+    if exists(output_directory):
         increment = 2
-        while exists(model_path + f'_{increment}'):
+        while exists(output_directory + f'_{increment}'):
             increment += 1
-        model_path += f'_{increment}'
-    makedirs(model_path, exist_ok=False)
-    return model_path
+        output_directory += f'_{increment}'
+    makedirs(output_directory, exist_ok=False)
+    return output_directory
 
 
 def _create_dataset(cell_graphs: List[DGLGraph],
@@ -283,7 +284,7 @@ def _test_model(model: CellGraphModel,
 def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
                                  Tuple[List[DGLGraph], List[int]],
                                  Tuple[List[DGLGraph], List[int]]],
-          save_path: str,
+          output_directory: str,
           in_ram: bool = True,
           epochs: int = 10,
           learning_rate: float = 10e-3,
@@ -294,8 +295,7 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
                                           Any] = DEFAULT_CLASSIFICATION_PARAMETERS
           ) -> CellGraphModel:
     """Train CG-GNN."""
-    # set path to save checkpoints
-    save_path = _set_save_path(save_path)
+    output_directory = _set_save_path(output_directory)
 
     # make datasets (train, validation & test)
     train_dataset, validation_dataset, test_dataset, kfold = _create_datasets(
@@ -336,14 +336,14 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
                 model, train_dataloader, loss_fn, optimizer, epoch, fold, step)
 
             # B.) validate
-            model = _validation_step(model, validation_dataloader, loss_fn, save_path, epoch, fold,
-                                     step, best_validation_loss, best_validation_accuracy,
-                                     best_validation_weighted_f1_score)
+            model = _validation_step(
+                model, validation_dataloader, loss_fn, output_directory, epoch, fold, step,
+                best_validation_loss, best_validation_accuracy, best_validation_weighted_f1_score)
 
     # testing loop
     if test_dataset is not None:
         model = _test_model(model, test_dataset, batch_size,
-                            loss_fn, save_path, step)
+                            loss_fn, output_directory, step)
 
     return model
 

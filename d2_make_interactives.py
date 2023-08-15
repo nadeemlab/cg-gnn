@@ -20,7 +20,7 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--cell_data_hdf_path',
+        '--spt_hdf_cell_filename',
         type=str,
         help='Where to find the data for cells to lookup feature and phenotype names.',
         required=True
@@ -31,7 +31,7 @@ def parse_arguments():
         action='store_true'
     )
     parser.add_argument(
-        '--out_directory',
+        '--output_directory',
         type=str,
         help='Where to save the output graph visualizations.',
         default=None,
@@ -49,9 +49,9 @@ if __name__ == "__main__":
             graph_groups[g.specimen].append(g.graph)
         else:
             graph_groups[g.name].append(g.graph)
-    columns = read_hdf(args.cell_data_hdf_path).columns.values
+    columns = read_hdf(args.spt_hdf_cell_filename).columns.values
     generate_interactives(
         graph_groups,
         [col[3:] for col in columns if col.startswith('FT_')],
         [col[3:] for col in columns if col.startswith('PH_')],
-        args.out_directory)
+        args.output_directory)

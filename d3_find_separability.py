@@ -23,7 +23,7 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--cell_data_hdf_path',
+        '--spt_hdf_cell_filename',
         type=str,
         help='Where to find the data for cells to lookup feature and phenotype names.',
         required=True
@@ -34,7 +34,7 @@ def parse_arguments():
         action='store_true'
     )
     parser.add_argument(
-        '--out_directory',
+        '--output_directory',
         type=str,
         help='Where to save the output reporting.',
         default=None,
@@ -49,7 +49,7 @@ if __name__ == "__main__":
     cell_graphs = [d.graph for d in cell_graphs_data]
     cell_graph_labels = [d.label for d in cell_graphs_data]
     cell_graph_combo = (cell_graphs, cell_graph_labels)
-    columns = read_hdf(args.cell_data_hdf_path).columns.values
+    columns = read_hdf(args.spt_hdf_cell_filename).columns.values
     df_concept, df_aggregated, dfs_k_dist = calculate_separability(
         cell_graph_combo,
         instantiate_model(
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         [col[3:] for col in columns if col.startswith('FT_')],
         [col[3:] for col in columns if col.startswith('PH_')],
         prune_misclassified=args.prune_misclassified,
-        out_directory=args.out_directory)
+        out_directory=args.output_directory)
     print(df_concept)
     print(df_aggregated)
     for cg_pair, df_k in dfs_k_dist.items():
