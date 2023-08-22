@@ -2,4 +2,4 @@
 
 from cggnn.generate_graphs import generate_graphs
 from cggnn.run import run
-from cggnn.train import train, infer
+from cggnn.train import train, infer, infer_with_model

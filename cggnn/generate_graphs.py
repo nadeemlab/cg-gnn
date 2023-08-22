@@ -1,4 +1,4 @@
-"""Generates graph from saved SPT files."""
+"""Generates graphs from saved SPT files."""
 
 from os import makedirs, listdir
 from os.path import join, isdir
