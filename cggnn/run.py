@@ -8,7 +8,7 @@ from pandas import DataFrame
 from dgl import DGLGraph
 
 from cggnn.util.constants import TRAIN_VALIDATION_TEST
-from cggnn.generate_graph_from_spt import generate_graphs
+from cggnn.generate_graphs import generate_graphs
 from cggnn.train import train
 from cggnn.explain import explain_cell_graphs
 
