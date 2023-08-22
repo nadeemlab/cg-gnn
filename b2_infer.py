@@ -3,7 +3,7 @@
 
 from argparse import ArgumentParser
 
-from cggnn.train import infer
+from cggnn import infer
 from cggnn.util import load_cell_graphs
 
 

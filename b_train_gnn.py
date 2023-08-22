@@ -5,7 +5,7 @@ from typing import Tuple, List
 
 from dgl import DGLGraph
 
-from cggnn.train import train
+from cggnn import train
 from cggnn.util import load_cell_graphs
 
 

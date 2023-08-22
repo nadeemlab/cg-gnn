@@ -6,7 +6,7 @@ from typing import Dict
 
 from pandas import read_hdf
 
-from cggnn.generate_graph_from_spt import generate_graphs
+from cggnn import generate_graphs
 
 
 def parse_arguments():
