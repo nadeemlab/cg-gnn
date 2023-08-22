@@ -7,7 +7,8 @@ from warnings import warn
 from typing import Optional, Tuple, List, Dict, DefaultDict
 
 from torch import Tensor, FloatTensor, IntTensor  # pylint: disable=no-name-in-module
-from numpy import ndarray, round, prod, percentile, argmin, nonzero
+from numpy import round, prod, percentile, argmin, nonzero
+from numpy.typing import NDArray
 from dgl import DGLGraph, graph
 from dgl.data.utils import save_graphs
 from sklearn.neighbors import kneighbors_graph
@@ -32,7 +33,7 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
     roi_area = prod(roi_size)
     labeled_specimens = df_label_all_specimens.index
 
-    labels: ndarray = df_label_all_specimens['result'].unique()
+    labels: NDArray = df_label_all_specimens['result'].unique()
     if len(labels) == 0:
         raise ValueError('No specimens have labels.')
     if len(labels) == 1:
@@ -116,10 +117,10 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
     return graphs_by_label_and_specimen, roi_names
 
 
-def _create_graph(node_indices: ndarray,
-                  centroids: ndarray,
-                  channels: ndarray,
-                  phenotypes: ndarray,
+def _create_graph(node_indices: NDArray,
+                  centroids: NDArray,
+                  channels: NDArray,
+                  phenotypes: NDArray,
                   n_neighbors: int = 5,
                   threshold: Optional[int] = None
                   ) -> DGLGraph:

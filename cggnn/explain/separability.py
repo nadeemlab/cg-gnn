@@ -19,7 +19,8 @@ from dgl import DGLGraph
 from sklearn.preprocessing import minmax_scale
 from sklearn.metrics import auc
 from numpy import (empty, argsort, array, max, concatenate, reshape, histogram, corrcoef, mean,
-                   ones, all, unique, sort, ndarray, inf)
+                   ones, all, unique, sort, inf)
+from numpy.typing import NDArray
 from scipy.stats import wasserstein_distance
 from scipy.ndimage.filters import uniform_filter1d
 from pandas import DataFrame
@@ -58,18 +59,18 @@ class AttributeSeparability:
 
     def process(
         self,
-        importance_list: List[ndarray],
-        attribute_list: List[ndarray],
+        importance_list: List[NDArray],
+        attribute_list: List[NDArray],
         label_list: List[int],
         attribute_names: List[str]
     ) -> Tuple[Dict[Tuple[int, int], Dict[str, float]],
-               Dict[int, Dict[int, ndarray]],
+               Dict[int, Dict[int, NDArray]],
                Dict[Tuple[int, int], Dict[int, Tuple[int, float]]]]:
         """Derive metrics based on the explainer importance scores and nuclei-level concepts.
 
         Args:
-            importance_list (List[ndarray]): Cell importance scores output by explainers.
-            attribute_list (List[ndarray]): Cell-level attributes (later grouped into concepts).
+            importance_list (List[NDArray]): Cell importance scores output by explainers.
+            attribute_list (List[NDArray]): Cell-level attributes (later grouped into concepts).
             label_list (List[int]): Labels.
         """
         # 1. extract number of concepts
@@ -117,7 +118,7 @@ class AttributeSeparability:
         self,
         all_histograms: Dict,
         n_attr: int
-    ) -> ndarray:
+    ) -> NDArray:
         """Compute all the pair-wise histogram distances.
 
         Args:
@@ -141,24 +142,24 @@ class AttributeSeparability:
 
     def _compute_attr_histograms(
         self,
-        importance_list: List[ndarray],
-        attribute_list: List[ndarray],
+        importance_list: List[NDArray],
+        attribute_list: List[NDArray],
         label_list: List[int],
         n_attrs: int
-    ) -> Dict[int, Dict[int, ndarray]]:
+    ) -> Dict[int, Dict[int, NDArray]]:
         """Compute histograms for all the attributes.
 
         Args:
-            importance_list (List[ndarray]): Cell importance scores output by explainers.
-            attribute_list (List[ndarray]): Cell-level attributes.
+            importance_list (List[NDArray]): Cell importance scores output by explainers.
+            attribute_list (List[NDArray]): Cell-level attributes.
             label_list (List[int]): Labels.
         Returns:
-            all_histograms (Dict[int, Dict[int, ndarray]]): Dict with all the histograms
+            all_histograms (Dict[int, Dict[int, NDArray]]): Dict with all the histograms
                                                             for each thresh k (as key),
                                                             tumor type (as key) and
                                                             attributes (as np array).
         """
-        all_histograms: Dict[int, Dict[int, ndarray]] = {}
+        all_histograms: Dict[int, Dict[int, NDArray]] = {}
         for k in self.keep_nuclei_list:
             all_histograms[k] = {}
 
@@ -188,26 +189,26 @@ class AttributeSeparability:
         return all_histograms
 
     @staticmethod
-    def normalize_node_importance(node_importance: List[ndarray]) -> List[ndarray]:
+    def normalize_node_importance(node_importance: List[NDArray]) -> List[NDArray]:
         """Normalize node importance. Min-max normalization on each sample.
 
         Args:
-            node_importance (List[ndarray]): node importance output by an explainer.
+            node_importance (List[NDArray]): node importance output by an explainer.
         Returns:
-            node_importance (List[ndarray]): Normalized node importance.
+            node_importance (List[NDArray]): Normalized node importance.
         """
         node_importance = [minmax_scale(x) for x in node_importance]
         return node_importance
 
     @staticmethod
-    def build_hist(concept_values: ndarray, num_bins: int = 100) -> ndarray:
+    def build_hist(concept_values: NDArray, num_bins: int = 100) -> NDArray:
         """Build a 1D histogram using the concept_values.
 
         Args:
-            concept_values (ndarray): All the nuclei-level values for a concept.
+            concept_values (NDArray): All the nuclei-level values for a concept.
             num_bins (int): Number of bins in the histogram. Default to 100.
         Returns:
-            hist (ndarray): Histogram
+            hist (NDArray): Histogram
         """
         hist, _ = histogram(
             concept_values, bins=num_bins, range=(0., 1.), density=True)
@@ -252,7 +253,7 @@ class SeparabilityAggregator:
                 grouped_sep_scores[class_pair][concept_key] = val
         return grouped_sep_scores
 
-    def compute_max_separability_score(self, risk: ndarray) -> Dict[Union[Tuple[int, int], str],
+    def compute_max_separability_score(self, risk: NDArray) -> Dict[Union[Tuple[int, int], str],
                                                                     float]:
         """Compute max separability score for each class pair and aggregate w/ and w/o risk.
 
@@ -271,7 +272,7 @@ class SeparabilityAggregator:
             [val for key, val in max_sep_score.items() if isinstance(key, tuple)])
         return max_sep_score
 
-    def compute_average_separability_score(self, risk: ndarray) -> Dict[Union[Tuple[int, int],
+    def compute_average_separability_score(self, risk: NDArray) -> Dict[Union[Tuple[int, int],
                                                                               str], float]:
         """Compute average separability score for each class pair and aggregate w/ and w/o risk.
 
@@ -291,8 +292,8 @@ class SeparabilityAggregator:
         return avg_sep_score
 
     def compute_correlation_separability_score(self,
-                                               risk: ndarray,
-                                               pathological_prior: ndarray
+                                               risk: NDArray,
+                                               pathological_prior: NDArray
                                                ) -> Dict[Union[Tuple[int, int], str], float]:
         """Compute correlation separability score between the prior and the concept-wise scores.
 
@@ -317,7 +318,7 @@ class SeparabilityAggregator:
         return corrs
 
 
-def plot_histogram(all_histograms: Dict[int, Dict[int, ndarray]],
+def plot_histogram(all_histograms: Dict[int, Dict[int, NDArray]],
                    save_path: str,
                    attr_id: int,
                    attr_name: str,
@@ -350,8 +351,8 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
                            prune_misclassified: bool = True,
                            concept_grouping: Optional[Dict[str,
                                                            List[str]]] = None,
-                           risk: Optional[ndarray] = None,
-                           pathological_prior: Optional[ndarray] = None,
+                           risk: Optional[NDArray] = None,
+                           pathological_prior: Optional[NDArray] = None,
                            out_directory: Optional[str] = None
                            ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame]]:
     """Generate separability scores for each concept."""

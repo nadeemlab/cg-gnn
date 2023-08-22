@@ -12,7 +12,6 @@ from tqdm import tqdm
 from torch import FloatTensor
 from torch.cuda import is_available
 from dgl import DGLGraph
-from numpy import ndarray
 
 from cggnn.util import CellGraphModel
 from cggnn.util.interpretability import (BaseExplainer, GraphLRPExplainer, GraphGradCAMExplainer,
@@ -53,7 +52,6 @@ def calculate_importance(cell_graphs: List[DGLGraph],
     # Calculate the importance scores for every graph
     for graph in tqdm(cell_graphs):
         importance_scores, _ = explainer.process(graph.to(DEVICE))
-        assert isinstance(importance_scores, ndarray)
         graph.ndata[IMPORTANCES] = FloatTensor(importance_scores)
 
     return cell_graphs

@@ -1,11 +1,11 @@
-#!/usr/bin/env python3
 """Train CG-GNN models."""
 
 from os import makedirs, listdir
 from os.path import exists, join
 from typing import Callable, List, Tuple, Optional, Any, Sequence, Dict
 
-from numpy import ndarray, array
+from numpy import array
+from numpy.typing import NDArray
 from torch import save, load, no_grad, argmax, cat
 from torch.cuda import is_available
 from torch.optim import Adam, Optimizer
@@ -353,7 +353,7 @@ def infer_with_model(model: CellGraphModel,
                      in_ram: bool = True,
                      batch_size: int = 1,
                      return_probability: bool = False
-                     ) -> ndarray:
+                     ) -> NDArray:
     """Given a model, infer their classes."""
     model = model.eval()
 

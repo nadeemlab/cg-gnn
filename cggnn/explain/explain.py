@@ -10,7 +10,7 @@ from os.path import join
 from typing import List, Optional, Tuple, Dict, DefaultDict
 
 from dgl import DGLGraph
-from numpy import ndarray
+from numpy.typing import NDArray
 from pandas import DataFrame, Index
 
 from cggnn.util import CellGraphModel
@@ -35,8 +35,8 @@ def explain_cell_graphs(cell_graphs_data: List[GraphData],
                         prune_misclassified: bool = True,
                         concept_grouping: Optional[Dict[str,
                                                         List[str]]] = None,
-                        risk: Optional[ndarray] = None,
-                        pathological_prior: Optional[ndarray] = None,
+                        risk: Optional[NDArray] = None,
+                        pathological_prior: Optional[NDArray] = None,
                         merge_rois: bool = True,
                         cell_graph_names: Optional[List[str]] = None,
                         label_to_result: Optional[Dict[int, str]] = None,
