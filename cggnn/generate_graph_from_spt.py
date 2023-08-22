@@ -16,13 +16,14 @@ from scipy.spatial.distance import pdist, squareform
 from tqdm import tqdm
 
 from cggnn.util import GraphData
-from cggnn.util.constants import CENTROIDS, FEATURES, INDICES, PHENOTYPES, TRAIN_VALIDATION_TEST
+from cggnn.util.constants import CENTROIDS, CHANNELS, INDICES, PHENOTYPES, TRAIN_VALIDATION_TEST
 
 
 def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
                                  df_label_all_specimens: DataFrame,
+                                 phenotype_symbols_by_column_name: Dict[str, str],
                                  roi_size: Tuple[int, int],
-                                 target_column: Optional[str] = None,
+                                 target_phenotype: Optional[str] = None,
                                  n_neighbors: int = 5,
                                  threshold: Optional[int] = None
                                  ) -> Tuple[Dict[int, Dict[str, List[DGLGraph]]],
@@ -49,17 +50,18 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
 
         # Initialize data structures
         bounding_boxes: List[Tuple[int, int, int, int, int, int]] = []
-        slide_size = df_specimen[['center_x', 'center_y']].max() + 100
-        if target_column is not None:
-            column_name = f'PH_{target_column}'
-            proportion_of_target = df_specimen[column_name].sum(
-            )/df_specimen.shape[0]
+        slide_size = df_specimen[['pixel x', 'pixel y']].max() + 100
+        if target_phenotype is not None:
+            # Invert the column to name dict to find the column name for the target
+            column_name = {v: k for k, v in phenotype_symbols_by_column_name.items()}[
+                target_phenotype]
+            proportion_of_target = df_specimen[column_name].sum()/df_specimen.shape[0]
             df_target = df_specimen.loc[df_specimen[column_name], :]
         else:
             proportion_of_target = 1.
             df_target = df_specimen
         distance_square = squareform(
-            pdist(df_target[['center_x', 'center_y']]))
+            pdist(df_target[['pixel x', 'pixel y']]))
         slide_area = prod(slide_size)
 
         # Create as many ROIs such that the total area of the ROIs will equal the area of the
@@ -69,38 +71,38 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
         while (len(bounding_boxes) < n_rois) and (df_target.shape[0] > 0):
             p_dist = percentile(distance_square, proportion_of_target, axis=0)
             x, y = df_specimen.iloc[argmin(
-                p_dist), :][['center_x', 'center_y']].tolist()
+                p_dist), :][['pixel x', 'pixel y']].tolist()
             x_min = x - roi_size[0]//2
             x_max = x + roi_size[0]//2
             y_min = y - roi_size[1]//2
             y_max = y + roi_size[1]//2
 
             # Check that this bounding box contains enough cells to do nearest neighbors on
-            if (df_specimen['center_x'].between(x_min, x_max) &
-                    df_specimen['center_y'].between(y_min, y_max)).shape[0] < n_neighbors + 1:
+            if (df_specimen['pixel x'].between(x_min, x_max) &
+                    df_specimen['pixel y'].between(y_min, y_max)).shape[0] < n_neighbors + 1:
                 # If not, terminate the ROI creation process early
                 break
 
             # Log the new bounding box and track which and how many cells haven't been captured yet
             bounding_boxes.append((x_min, x_max, y_min, y_max, x, y))
             proportion_of_target -= roi_area / slide_area
-            cells_not_yet_captured = ~(df_target['center_x'].between(
-                x_min, x_max) & df_target['center_y'].between(y_min, y_max))
+            cells_not_yet_captured = ~(df_target['pixel x'].between(
+                x_min, x_max) & df_target['pixel y'].between(y_min, y_max))
             df_target = df_target.loc[cells_not_yet_captured, :]
             distance_square = distance_square[cells_not_yet_captured,
                                               :][:, cells_not_yet_captured]
 
-        # Create feature, centroid, and label arrays and then the graph
-        df_features = df_specimen.loc[:, df_specimen.columns.str.startswith('FT_')]
-        df_phenotypes = df_specimen.loc[:, df_specimen.columns.str.startswith('PH_')]
+        # Create features, centroid, and label arrays and then the graph
+        df_channels = df_specimen.loc[:, df_specimen.columns.str.startswith('F')]
+        df_phenotypes = df_specimen.loc[:, df_specimen.columns.str.startswith('P')]
         for i, (x_min, x_max, y_min, y_max, x, y) in enumerate(bounding_boxes):
-            df_roi: DataFrame = df_specimen.loc[df_specimen['center_x'].between(
-                x_min, x_max) & df_specimen['center_y'].between(y_min, y_max), ]
-            centroids = df_roi[['center_x', 'center_y']].values
-            features = df_features.loc[df_roi.index, ].astype(int).values
+            df_roi: DataFrame = df_specimen.loc[df_specimen['pixel x'].between(
+                x_min, x_max) & df_specimen['pixel y'].between(y_min, y_max), ]
+            centroids = df_roi[['pixel x', 'pixel y']].values
+            channels = df_channels.loc[df_roi.index, ].astype(int).values
             phenotypes = df_phenotypes.loc[df_roi.index, ].astype(int).values
             graph_instance = _create_graph(
-                df_roi.index.to_numpy(), centroids, features, phenotypes, n_neighbors=n_neighbors,
+                df_roi.index.to_numpy(), centroids, channels, phenotypes, n_neighbors=n_neighbors,
                 threshold=threshold)
             graphs_by_specimen[specimen].append(graph_instance)
             roi_names[graph_instance] = \
@@ -116,7 +118,7 @@ def _create_graphs_from_spt_file(df_cell_all_specimens: DataFrame,
 
 def _create_graph(node_indices: ndarray,
                   centroids: ndarray,
-                  features: ndarray,
+                  channels: ndarray,
                   phenotypes: ndarray,
                   n_neighbors: int = 5,
                   threshold: Optional[int] = None
@@ -126,7 +128,7 @@ def _create_graph(node_indices: ndarray,
     Args:
         node_indices (array): Indices for each node.
         centroids (array): Node centroids
-        features (array): Features of each node. Shape (nr_nodes, nr_features)
+        channels (array): Features of each node based on chemical channels.
         phenotypes (array): A set of alternative features for each node based on phenotypes.
         n_neighbors (int, optional): Number of neighbors. Defaults to 5.
         threshold (int, optional): Maximum allowed distance between 2 nodes.
@@ -135,14 +137,14 @@ def _create_graph(node_indices: ndarray,
         DGLGraph: The constructed graph
     """
     # add nodes
-    num_nodes = features.shape[0]
+    num_nodes = channels.shape[0]
     graph_instance = graph([])
     graph_instance.add_nodes(num_nodes)
     graph_instance.ndata[INDICES] = IntTensor(node_indices)
     graph_instance.ndata[CENTROIDS] = FloatTensor(centroids)
-    graph_instance.ndata[FEATURES] = FloatTensor(features)
+    graph_instance.ndata[CHANNELS] = FloatTensor(channels)
     graph_instance.ndata[PHENOTYPES] = FloatTensor(phenotypes)
-    # Note: features and phenotypes are binary variables, but DGL only supports FloatTensors
+    # Note: channels and phenotypes are binary variables, but DGL only supports FloatTensors
 
     # build kNN adjacency
     adj = kneighbors_graph(
@@ -256,6 +258,7 @@ def _split_rois(graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]
 
 def generate_graphs(df_feat_all_specimens: DataFrame,
                     df_label_all_specimens: DataFrame,
+                    phenotype_symbols_by_column_name: Dict[str, str],
                     validation_data_percent: int,
                     test_data_percent: int,
                     roi_side_length: int,
@@ -301,7 +304,8 @@ def generate_graphs(df_feat_all_specimens: DataFrame,
 
     # Create the graphs
     graphs_by_label_and_specimens, graph_names = _create_graphs_from_spt_file(
-        df_feat_all_specimens, df_label_all_specimens, roi_size, target_column=target_column)
+        df_feat_all_specimens, df_label_all_specimens, phenotype_symbols_by_column_name, roi_size,
+        target_phenotype=target_column)
 
     # Split graphs into train/validation/test sets as requested
     sets_data = _split_rois(graphs_by_label_and_specimens, p_validation, p_test)

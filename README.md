@@ -4,9 +4,13 @@
 
 This library is a heavily modified version of [histocartography](https://github.com/BiomedSciAI/histocartography) and two of its applications, [hact-net](https://github.com/histocartography/hact-net) and [patho-quant-explainer](https://github.com/histocartography/patho-quant-explainer).
 
-## Installation
+## Getting started
 
-### Using pip
+First, use [`spt cggnn extract`](https://github.com/nadeemlab/SPT/tree/main/spatialprofilingtoolbox/cggnn) to fetch pandas HDF files and JSONs that `cg-gnn` can use. Then, install `cg-gnn` using one of the methods below and run `main.py` from the command line or `run_all` from `cggnn/run_all.py`, providing it the paths to the files output by `spt cggnn extract` and your choice of parameters.
+
+### Installation
+
+#### Using pip
 
 In addition to installing via pip,
 ```
@@ -17,7 +21,7 @@ you must also install using the instructions on their websites,
 * [DGL](https://www.dgl.ai/pages/start.html)
 * [CUDA](https://anaconda.org/nvidia/cudatoolkit) (optional but highly recommended if your machine supports it)
 
-### From source
+#### From source
 
 1. Clone this repository
 2. Create a conda environment using

@@ -1,10 +1,10 @@
 """Explain a cell graph (CG) prediction using a pretrained CG-GNN and a graph explainer."""
+
 from argparse import ArgumentParser
 
-from pandas import read_hdf
-
 from cggnn.explain import explain_cell_graphs
-from cggnn.util import load_cell_graphs, instantiate_model, load_label_to_result
+from cggnn.util import load_cell_graphs, instantiate_model, load_label_to_result, \
+    load_feature_names
 
 
 def parse_arguments():
@@ -32,7 +32,19 @@ def parse_arguments():
     parser.add_argument(
         '--spt_hdf_cell_filename',
         type=str,
-        help='Where to find the data for cells to lookup feature and phenotype names.',
+        help='Where to find the data for cells to lookup channel and phenotype names.',
+        required=True
+    )
+    parser.add_argument(
+        '--channel_names_by_column_name_path',
+        type=str,
+        help='Path to JSON translating cell DataFrame channel names to readable symbols.',
+        required=True
+    )
+    parser.add_argument(
+        '--phenotype_names_by_column_name_path',
+        type=str,
+        help='Path to JSON translating cell DataFrame phenotype names to readable symbols.',
         required=True
     )
     parser.add_argument(
@@ -66,14 +78,16 @@ if __name__ == "__main__":
     cell_graphs_data = load_cell_graphs(args.cg_path)
     cell_graphs = [d.graph for d in cell_graphs_data]
     cell_graph_combo = (cell_graphs, [d.label for d in cell_graphs_data])
-    columns = read_hdf(args.cell_data_hdf_path).columns.values
+    channel_names, phenotype_names = load_feature_names(args.spt_hdf_cell_filename,
+                                                        args.channel_names_by_column_name_path,
+                                                        args.phenotype_names_by_column_name_path)
     df_concept, df_aggregated, dfs_k_dist, importances = explain_cell_graphs(
         cell_graphs_data,
         instantiate_model(cell_graph_combo,
                           model_checkpoint_path=args.model_checkpoint_path),
         args.explainer,
-        [col[3:] for col in columns if col.startswith('FT_')],
-        [col[3:] for col in columns if col.startswith('PH_')],
+        channel_names,
+        phenotype_names,
         merge_rois=args.merge_rois,
         prune_misclassified=args.prune_misclassified,
         cell_graph_names=[d.name for d in cell_graphs_data] if (

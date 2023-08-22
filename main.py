@@ -2,40 +2,28 @@
 
 from argparse import ArgumentParser
 
-from cggnn.run_all import run_pipeline
+from cggnn.run_all import run
 
 
 def parse_arguments():
     """Process command line arguments."""
     parser = ArgumentParser()
     parser.add_argument(
-        '--study',
+        '--spt_hdf_cell_filename',
         type=str,
-        help='Name of the study in SPT.',
+        help='Path to the SPT cell attributes HDF.',
         required=True
     )
     parser.add_argument(
-        '--host',
+        '--spt_hdf_label_filename',
         type=str,
-        help='Host SQL server IP.',
+        help='Path to the SPT labels HDF.',
         required=True
     )
     parser.add_argument(
-        '--dbname',
+        '--phenotype_names_by_column_name_path',
         type=str,
-        help='Database in SQL server to query.',
-        required=True
-    )
-    parser.add_argument(
-        '--user',
-        type=str,
-        help='Server login username.',
-        required=True
-    )
-    parser.add_argument(
-        '--password',
-        type=str,
-        help='Server login password.',
+        help='Path to JSON translating cell DataFrame phenotype names to readable symbols.',
         required=True
     )
     parser.add_argument(
@@ -122,19 +110,17 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    run_pipeline(args.study,
-                 args.host,
-                 args.dbname,
-                 args.user,
-                 args.password,
-                 args.validation_data_percent,
-                 args.test_data_percent,
-                 args.roi_side_length,
-                 args.target_column,
-                 args.batch_size,
-                 args.epochs,
-                 args.learning_rate,
-                 args.k_folds,
-                 args.explainer,
-                 args.merge_rois,
-                 args.prune_misclassified)
+    run(args.spt_hdf_cell_filename,
+        args.spt_hdf_label_filename,
+        args.phenotype_names_by_column_name_path,
+        args.validation_data_percent,
+        args.test_data_percent,
+        args.roi_side_length,
+        args.target_column,
+        args.batch_size,
+        args.epochs,
+        args.learning_rate,
+        args.k_folds,
+        args.explainer,
+        args.merge_rois,
+        args.prune_misclassified)

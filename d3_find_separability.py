@@ -1,10 +1,9 @@
 """Explain a cell graph (CG) prediction using a pretrained CG-GNN and a graph explainer."""
+
 from argparse import ArgumentParser
 
-from pandas import read_hdf
-
 from cggnn.explain import calculate_separability
-from cggnn.util import load_cell_graphs, instantiate_model
+from cggnn.util import load_cell_graphs, load_feature_names, instantiate_model
 
 
 def parse_arguments():
@@ -25,7 +24,19 @@ def parse_arguments():
     parser.add_argument(
         '--spt_hdf_cell_filename',
         type=str,
-        help='Where to find the data for cells to lookup feature and phenotype names.',
+        help='Where to find the data for cells to lookup channel and phenotype names.',
+        required=True
+    )
+    parser.add_argument(
+        '--channel_names_by_column_name_path',
+        type=str,
+        help='Path to JSON translating cell DataFrame channel names to readable symbols.',
+        required=True
+    )
+    parser.add_argument(
+        '--phenotype_names_by_column_name_path',
+        type=str,
+        help='Path to JSON translating cell DataFrame phenotype names to readable symbols.',
         required=True
     )
     parser.add_argument(
@@ -49,13 +60,15 @@ if __name__ == "__main__":
     cell_graphs = [d.graph for d in cell_graphs_data]
     cell_graph_labels = [d.label for d in cell_graphs_data]
     cell_graph_combo = (cell_graphs, cell_graph_labels)
-    columns = read_hdf(args.spt_hdf_cell_filename).columns.values
+    channel_names, phenotype_names = load_feature_names(args.spt_hdf_cell_filename,
+                                                        args.channel_names_by_column_name_path,
+                                                        args.phenotype_names_by_column_name_path)
     df_concept, df_aggregated, dfs_k_dist = calculate_separability(
         cell_graph_combo,
         instantiate_model(
             cell_graph_combo, model_checkpoint_path=args.model_checkpoint_path),
-        [col[3:] for col in columns if col.startswith('FT_')],
-        [col[3:] for col in columns if col.startswith('PH_')],
+        channel_names,
+        phenotype_names,
         prune_misclassified=args.prune_misclassified,
         out_directory=args.output_directory)
     print(df_concept)

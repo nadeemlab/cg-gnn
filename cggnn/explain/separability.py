@@ -26,7 +26,7 @@ from pandas import DataFrame
 from matplotlib.pyplot import plot, title, savefig, legend, clf
 
 from cggnn.util import CellGraphModel
-from cggnn.util.constants import FEATURES, PHENOTYPES, IMPORTANCES
+from cggnn.util.constants import CHANNELS, PHENOTYPES, IMPORTANCES
 from cggnn.train import infer_with_model
 
 
@@ -345,7 +345,7 @@ def _misclassified(cell_graphs: List[DGLGraph],
 
 def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
                            model: CellGraphModel,
-                           feature_names: List[str],
+                           channel_names: List[str],
                            phenotype_names: List[str],
                            prune_misclassified: bool = True,
                            concept_grouping: Optional[Dict[str,
@@ -355,15 +355,15 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
                            out_directory: Optional[str] = None
                            ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame]]:
     """Generate separability scores for each concept."""
-    # Get the importance scores, labels, features, and phenotypes from all cell graphs
+    # Get the importance scores, labels, channels, and phenotypes from all cell graphs
     importance_scores = [graph.ndata[IMPORTANCES]
                          for graph in cell_graphs_and_labels[0]]
     labels = cell_graphs_and_labels[1]
-    attributes = [concatenate((features, phenotypes), axis=1) for features, phenotypes in zip(
-        [graph.ndata[FEATURES] for graph in cell_graphs_and_labels[0]],
+    attributes = [concatenate((channels, phenotypes), axis=1) for channels, phenotypes in zip(
+        [graph.ndata[CHANNELS] for graph in cell_graphs_and_labels[0]],
         [graph.ndata[PHENOTYPES] for graph in cell_graphs_and_labels[0]]
     )]
-    attribute_names = feature_names + phenotype_names
+    attribute_names = channel_names + phenotype_names
 
     assert len(importance_scores) == len(labels) == len(attributes)
     assert attributes[0].shape[1] == len(attribute_names)

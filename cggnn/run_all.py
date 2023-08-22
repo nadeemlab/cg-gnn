@@ -8,28 +8,29 @@ from pandas import DataFrame
 from dgl import DGLGraph
 
 from cggnn.util.constants import TRAIN_VALIDATION_TEST
-from cggnn.spt_to_df import spt_to_dataframes
 from cggnn.generate_graph_from_spt import generate_graphs
 from cggnn.train import train
 from cggnn.explain import explain_cell_graphs
 
 
-def run_with_dfs(df_cell: DataFrame,
-                 df_label: DataFrame,
-                 label_to_result: Dict[int, str],
-                 validation_data_percent: int = 15,
-                 test_data_percent: int = 15,
-                 roi_side_length: int = 600,
-                 target_column: Optional[str] = None,
-                 batch_size: int = 1,
-                 epochs: int = 10,
-                 learning_rate: float = 10e-3,
-                 k_folds: int = 0,
-                 explainer: str = 'pp',
-                 merge_rois: bool = True,
-                 prune_misclassified: bool = True
-                 ) -> None:
-    """Run the SPT CG-GNN pipeline on the given DataFrames."""
+def run(df_cell: DataFrame,
+        df_label: DataFrame,
+        label_to_result: Dict[int, str],
+        channel_symbols_by_column_name: Dict[str, str],
+        phenotype_symbols_by_column_name: Dict[str, str],
+        validation_data_percent: int = 15,
+        test_data_percent: int = 15,
+        roi_side_length: int = 600,
+        target_column: Optional[str] = None,
+        batch_size: int = 1,
+        epochs: int = 10,
+        learning_rate: float = 10e-3,
+        k_folds: int = 0,
+        explainer: str = 'pp',
+        merge_rois: bool = True,
+        prune_misclassified: bool = True
+        ) -> None:
+    """Run the SPT CG-GNN pipeline on the given DataFrames and identifier-to-name dictionaries."""
     makedirs('tmp/', exist_ok=True)
     graphs = generate_graphs(df_cell, df_label, validation_data_percent,
                              test_data_percent, roi_side_length, target_column)
@@ -58,8 +59,8 @@ def run_with_dfs(df_cell: DataFrame,
     assert evaluation_set is not None
     explanations = explain_cell_graphs(
         graphs, model, explainer,
-        [col[3:] for col in columns if col.startswith('FT_')],
-        [col[3:] for col in columns if col.startswith('PH_')],
+        [channel_symbols_by_column_name[col] for col in columns if col.startswith('F')],
+        [phenotype_symbols_by_column_name[col] for col in columns if col.startswith('P')],
         merge_rois=merge_rois,
         prune_misclassified=prune_misclassified,
         cell_graph_names=[d.name for d in graphs
@@ -72,39 +73,3 @@ def run_with_dfs(df_cell: DataFrame,
     for class_pair, df in explanations[2].items():
         df.to_csv(f'out/separability_k_best_{class_pair}.csv')
     rmtree('tmp/')
-
-
-def run_pipeline(study: str,
-                 host: str,
-                 dbname: str,
-                 user: str,
-                 password: str,
-                 validation_data_percent: int = 15,
-                 test_data_percent: int = 15,
-                 roi_side_length: int = 600,
-                 target_column: Optional[str] = None,
-                 batch_size: int = 1,
-                 epochs: int = 10,
-                 learning_rate: float = 10e-3,
-                 k_folds: int = 0,
-                 explainer: str = 'pp',
-                 merge_rois: bool = True,
-                 prune_misclassified: bool = True) -> None:
-    """Run the full SPT CG-GNN pipeline."""
-    df_cell, df_label, label_to_result = spt_to_dataframes(
-        study, host, dbname, user, password)
-    run_with_dfs(df_cell=df_cell,
-                 df_label=df_label,
-                 label_to_result=label_to_result,
-                 validation_data_percent=validation_data_percent,
-                 test_data_percent=test_data_percent,
-                 roi_side_length=roi_side_length,
-                 target_column=target_column,
-                 batch_size=batch_size,
-                 epochs=epochs,
-                 learning_rate=learning_rate,
-                 k_folds=k_folds,
-                 explainer=explainer,
-                 merge_rois=merge_rois,
-                 prune_misclassified=prune_misclassified
-                 )

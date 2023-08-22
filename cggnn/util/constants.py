@@ -1,7 +1,7 @@
 """Consistent names for dict field strings."""
 
 INDICES = 'histological_structure'
-FEATURES = 'features'
+CHANNELS = 'channels'
 PHENOTYPES = 'phenotypes'
 CENTROIDS = 'centroid'
 IMPORTANCES = 'importance'

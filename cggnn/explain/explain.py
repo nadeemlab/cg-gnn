@@ -30,7 +30,7 @@ def _class_pair_rephrase(class_pair: Tuple[int, int],
 def explain_cell_graphs(cell_graphs_data: List[GraphData],
                         model: CellGraphModel,
                         explainer_model: str,
-                        feature_names: List[str],
+                        channel_names: List[str],
                         phenotype_names: List[str],
                         prune_misclassified: bool = True,
                         concept_grouping: Optional[Dict[str,
@@ -54,11 +54,11 @@ def explain_cell_graphs(cell_graphs_data: List[GraphData],
                 graph_groups[graph.specimen].append(graph.graph)
             else:
                 graph_groups[graph.name].append(graph.graph)
-        generate_interactives(graph_groups, feature_names,
+        generate_interactives(graph_groups, channel_names,
                               phenotype_names, out_directory)
 
     df_seperability_by_concept, df_seperability_aggregated, dfs_k_max_distance = \
-        calculate_separability(cell_graphs_and_labels, model, feature_names, phenotype_names,
+        calculate_separability(cell_graphs_and_labels, model, channel_names, phenotype_names,
                                prune_misclassified=prune_misclassified,
                                concept_grouping=concept_grouping, risk=risk,
                                pathological_prior=pathological_prior, out_directory=out_directory)

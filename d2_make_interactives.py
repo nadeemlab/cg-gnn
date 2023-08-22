@@ -3,11 +3,10 @@
 from argparse import ArgumentParser
 from typing import Dict, List, DefaultDict
 
-from pandas import read_hdf
 from dgl import DGLGraph
 
 from cggnn.explain import generate_interactives
-from cggnn.util import load_cell_graphs
+from cggnn.util import load_cell_graphs, load_feature_names
 
 
 def parse_arguments():
@@ -22,7 +21,19 @@ def parse_arguments():
     parser.add_argument(
         '--spt_hdf_cell_filename',
         type=str,
-        help='Where to find the data for cells to lookup feature and phenotype names.',
+        help='Where to find the data for cells to lookup channel and phenotype names.',
+        required=True
+    )
+    parser.add_argument(
+        '--channel_names_by_column_name_path',
+        type=str,
+        help='Path to JSON translating cell DataFrame channel names to readable symbols.',
+        required=True
+    )
+    parser.add_argument(
+        '--phenotype_names_by_column_name_path',
+        type=str,
+        help='Path to JSON translating cell DataFrame phenotype names to readable symbols.',
         required=True
     )
     parser.add_argument(
@@ -49,9 +60,11 @@ if __name__ == "__main__":
             graph_groups[g.specimen].append(g.graph)
         else:
             graph_groups[g.name].append(g.graph)
-    columns = read_hdf(args.spt_hdf_cell_filename).columns.values
+    channel_names, phenotype_names = load_feature_names(args.spt_hdf_cell_filename,
+                                                        args.channel_names_by_column_name_path,
+                                                        args.phenotype_names_by_column_name_path)
     generate_interactives(
         graph_groups,
-        [col[3:] for col in columns if col.startswith('FT_')],
-        [col[3:] for col in columns if col.startswith('PH_')],
+        channel_names,
+        phenotype_names,
         args.output_directory)
