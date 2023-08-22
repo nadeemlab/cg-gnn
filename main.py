@@ -2,7 +2,7 @@
 
 from argparse import ArgumentParser
 
-from cggnn.run_all import run
+from cggnn.run import run
 
 
 def parse_arguments():
