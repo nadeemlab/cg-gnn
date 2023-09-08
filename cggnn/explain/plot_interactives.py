@@ -15,12 +15,11 @@ from bokeh.palettes import YlOrRd8
 from bokeh.layouts import row
 from bokeh.io import output_file, save
 
-from cggnn.util.constants import INDICES, CHANNELS, PHENOTYPES, CENTROIDS, IMPORTANCES
+from cggnn.util.constants import INDICES, FEATURES, CENTROIDS, IMPORTANCES
 
 
 def _make_bokeh_graph_plot(graph: DiGraph,
-                           channel_names: List[str],
-                           phenotype_names: List[str],
+                           feature_names: List[str],
                            graph_name: str,
                            out_directory: str) -> None:
     """Create bokeh interactive graph visualization."""
@@ -49,8 +48,7 @@ def _make_bokeh_graph_plot(graph: DiGraph,
     hover.callback = CustomJS(
         args=dict(hover=hover,
                   source=plot.node_renderer.data_source),
-        code='const feats = ["' + '", "'.join(channel_names) + '"];' +
-        'const phenotypes = ["' + '", "'.join(phenotype_names) + '"];' +
+        code='const feats = ["' + '", "'.join(feature_names) + '"];' +
         """
         if (cb_data.index.indices.length > 0) {
             const node_index = cb_data.index.indices[0];
@@ -60,18 +58,13 @@ def _make_bokeh_graph_plot(graph: DiGraph,
                     tooltips.push([`${feat_name}`, `@${feat_name}`]);
                 }
             }
-            for (const phenotype_name of phenotypes) {
-                if (source.data[phenotype_name][node_index]) {
-                    tooltips.push([`${phenotype_name}`, "1"]);
-                }
-            }
             hover.tooltips = tooltips;
         }
     """)
 
     # Add interactive dropdown to change why field nodes are colored by
-    color_select = Select(title='Color by property', value='importance', options=[
-        'importance'] + channel_names + phenotype_names)
+    color_select = Select(title='Color by property', value='importance',
+                          options=['importance'] + feature_names)
     color_select.js_on_change('value', CustomJS(
         args=dict(source=plot.node_renderer.data_source,
                   cir=plot.node_renderer.glyph),
@@ -89,9 +82,7 @@ def _make_bokeh_graph_plot(graph: DiGraph,
     save(layout)
 
 
-def _convert_dgl_to_networkx(graph: DGLGraph,
-                             channel_names: List[str],
-                             phenotype_names: List[str]) -> DiGraph:
+def _convert_dgl_to_networkx(graph: DGLGraph, feature_names: List[str]) -> DiGraph:
     """Convert DGL graph to networkx graph for plotting interactive."""
     if IMPORTANCES not in graph.ndata:
         raise ValueError(
@@ -101,12 +92,9 @@ def _convert_dgl_to_networkx(graph: DGLGraph,
     for i_g in range(graph.num_nodes()):
         i_gx = graph.ndata[INDICES][i_g].detach().numpy().astype(int).item()
         graph_networkx.add_node(i_gx)
-        feats = graph.ndata[CHANNELS][i_g].detach().numpy()
-        for j, feat in enumerate(channel_names):
+        feats = graph.ndata[FEATURES][i_g].detach().numpy()
+        for j, feat in enumerate(feature_names):
             graph_networkx.nodes[i_gx][feat] = feats[j]
-        phenotypes = graph.ndata[PHENOTYPES][i_g].detach().numpy()
-        for j, phenotype in enumerate(phenotype_names):
-            graph_networkx.nodes[i_gx][phenotype] = phenotypes[j]
         graph_networkx.nodes[i_gx]['importance'] = graph.ndata[IMPORTANCES][i_g].detach().numpy()
         graph_networkx.nodes[i_gx]['radius'] = graph_networkx.nodes[i_gx][IMPORTANCES]*10
         graph_networkx.nodes[i_gx]['centroid'] = graph.ndata[CENTROIDS][i_g].detach().numpy()
@@ -140,15 +128,11 @@ def _stich_specimen_graphs(graphs: List[DiGraph]) -> DiGraph:
 
 
 def generate_interactives(graphs_to_plot: Dict[str, List[DGLGraph]],
-                          channel_names: List[str],
-                          phenotype_names: List[str],
-                          out_directory: str
-                          ) -> None:
+                          feature_names: List[str],
+                          out_directory: str) -> None:
     """Create bokeh interactive plots for all graphs in the out_directory."""
     out_directory = join(out_directory, 'interactives')
     makedirs(out_directory, exist_ok=True)
     for name, dgl_graphs in tqdm(graphs_to_plot.items()):
-        graphs = [_convert_dgl_to_networkx(
-            graph, channel_names, phenotype_names) for graph in dgl_graphs]
-        _make_bokeh_graph_plot(_stich_specimen_graphs(graphs),
-                               channel_names, phenotype_names, name, out_directory)
+        graphs = [_convert_dgl_to_networkx(graph, feature_names) for graph in dgl_graphs]
+        _make_bokeh_graph_plot(_stich_specimen_graphs(graphs), feature_names, name, out_directory)

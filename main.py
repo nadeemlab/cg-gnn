@@ -21,10 +21,10 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--phenotype_names_by_column_name_path',
+        '--label_to_result_path',
         type=str,
-        help='Path to JSON translating cell DataFrame phenotype names to readable symbols.',
-        required=True
+        help='Where to find the data mapping label ints to their string results.',
+        required=False
     )
     parser.add_argument(
         '--validation_data_percent',
@@ -112,7 +112,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     run(args.spt_hdf_cell_filename,
         args.spt_hdf_label_filename,
-        args.phenotype_names_by_column_name_path,
+        args.label_to_result_path,
         args.validation_data_percent,
         args.test_data_percent,
         args.roi_side_length,

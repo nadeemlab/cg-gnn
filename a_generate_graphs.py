@@ -1,10 +1,8 @@
 """Generates graph from saved SPT files."""
 
 from argparse import ArgumentParser
-from json import load as json_load
-from typing import Dict
 
-from pandas import read_hdf
+from pandas import read_hdf  # type: ignore
 
 from cggnn import generate_graphs
 
@@ -22,12 +20,6 @@ def parse_arguments():
         '--spt_hdf_label_filename',
         type=str,
         help='Path to the SPT labels HDF.',
-        required=True
-    )
-    parser.add_argument(
-        '--phenotype_names_by_column_name_path',
-        type=str,
-        help='Path to JSON translating cell DataFrame phenotype names to readable symbols.',
         required=True
     )
     parser.add_argument(
@@ -54,6 +46,16 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
+        '--disable_channels',
+        action='store_true',
+        help='Disable the use of channel information in the graph.',
+    )
+    parser.add_argument(
+        '--disable_phenotypes',
+        action='store_true',
+        help='Disable the use of phenotype information in the graph.',
+    )
+    parser.add_argument(
         '--target_column',
         type=str,
         help='Phenotype column to use to build ROIs around.',
@@ -70,15 +72,14 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def read_symbols_by_column_name(path: str) -> Dict[str, str]:
-    """Read in *_symbols_by_column_name JSON."""
-    return {column_name: symbol for column_name, symbol in json_load(
-        open(path, encoding='utf-8')).items()}
-
-
 if __name__ == "__main__":
     args = parse_arguments()
-    generate_graphs(read_hdf(args.spt_hdf_cell_filename), read_hdf(args.spt_hdf_label_filename),
-                    read_symbols_by_column_name(args.phenotype_names_by_column_name_path),
-                    args.validation_data_percent, args.test_data_percent, args.roi_side_length,
-                    args.target_column, args.output_directory)
+    generate_graphs(read_hdf(args.spt_hdf_cell_filename),  # type: ignore
+                    read_hdf(args.spt_hdf_label_filename),  # type: ignore
+                    args.validation_data_percent,
+                    args.test_data_percent,
+                    args.roi_side_length,
+                    not args.disable_channels,
+                    not args.disable_phenotypes,
+                    args.target_column,
+                    args.output_directory)

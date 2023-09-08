@@ -12,11 +12,9 @@ from torch.cuda import is_available
 from torch.utils.data import Dataset
 from dgl import batch, DGLGraph
 from dgl.data.utils import load_graphs
-from pandas import read_hdf
 
 from cggnn.util.ml.cell_graph_model import CellGraphModel
-from cggnn.util.constants import (CHANNELS, DEFAULT_GNN_PARAMETERS,
-                                  DEFAULT_CLASSIFICATION_PARAMETERS)
+from cggnn.util.constants import FEATURES, DEFAULT_GNN_PARAMETERS, DEFAULT_CLASSIFICATION_PARAMETERS
 
 
 IS_CUDA = is_available()
@@ -35,26 +33,6 @@ def load_label_to_result(path: str) -> Dict[int, str]:
     """Read in label_to_result JSON."""
     return {int(label): result for label, result in json_load(
         open(path, encoding='utf-8')).items()}
-
-
-def load_feature_names(cell_data_hdf_path: str,
-                       channel_names_by_column_name_path: str,
-                       phenotype_names_by_column_name_path: str) -> Tuple[List[str], List[str]]:
-    """Read in *_symbols_by_column_name JSON."""
-    columns: List[str] = read_hdf(cell_data_hdf_path).columns.tolist()
-    channel_symbols: List[str] = []
-    phenotype_symbols: List[str] = []
-    column_name_to_symbols: Tuple[Dict[str, str], Dict[str, str]] = ({}, {})
-    for i, path in enumerate((channel_names_by_column_name_path, 
-                              phenotype_names_by_column_name_path)):
-        column_name_to_symbols[i] = {column_name: symbol for column_name, symbol in json_load(
-        open(path, encoding='utf-8')).items()}
-    for column in columns:
-        if column.startswith('F'):
-            channel_symbols.append(column_name_to_symbols[0][column])
-        elif column.startswith('P'):
-            phenotype_symbols.append(column_name_to_symbols[1][column])
-    return channel_symbols, phenotype_symbols
 
 
 class GraphData(NamedTuple):
@@ -154,7 +132,7 @@ def instantiate_model(cell_graphs: Tuple[List[DGLGraph], List[int]],
     model = CellGraphModel(
         gnn_params=gnn_parameters,
         classification_params=classification_parameters,
-        node_dim=cell_graphs[0][0].ndata[CHANNELS].shape[1],
+        node_dim=cell_graphs[0][0].ndata[FEATURES].shape[1],
         num_classes=int(max(cell_graphs[1]))+1
     ).to(DEVICE)
     if model_checkpoint_path is not None:

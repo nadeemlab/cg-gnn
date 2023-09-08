@@ -30,8 +30,7 @@ def _class_pair_rephrase(class_pair: Tuple[int, int],
 def explain_cell_graphs(cell_graphs_data: List[GraphData],
                         model: CellGraphModel,
                         explainer_model: str,
-                        channel_names: List[str],
-                        phenotype_names: List[str],
+                        feature_names: List[str],
                         prune_misclassified: bool = True,
                         concept_grouping: Optional[Dict[str,
                                                         List[str]]] = None,
@@ -54,11 +53,10 @@ def explain_cell_graphs(cell_graphs_data: List[GraphData],
                 graph_groups[graph.specimen].append(graph.graph)
             else:
                 graph_groups[graph.name].append(graph.graph)
-        generate_interactives(graph_groups, channel_names,
-                              phenotype_names, out_directory)
+        generate_interactives(graph_groups, feature_names, out_directory)
 
     df_seperability_by_concept, df_seperability_aggregated, dfs_k_max_distance = \
-        calculate_separability(cell_graphs_and_labels, model, channel_names, phenotype_names,
+        calculate_separability(cell_graphs_and_labels, model, feature_names,
                                prune_misclassified=prune_misclassified,
                                concept_grouping=concept_grouping, risk=risk,
                                pathological_prior=pathological_prior, out_directory=out_directory)
@@ -78,8 +76,7 @@ def explain_cell_graphs(cell_graphs_data: List[GraphData],
     for cell_graph_data in cell_graphs_data:
         cell_graphs_by_specimen[cell_graph_data.specimen].append(
             cell_graph_data.graph)
-    importances = unify_importance_across(
-        list(cell_graphs_by_specimen.values()), model)
+    importances = unify_importance_across(list(cell_graphs_by_specimen.values()), model)
     if out_directory is not None:
         save_importances(importances, join(out_directory, 'importances.csv'))
 

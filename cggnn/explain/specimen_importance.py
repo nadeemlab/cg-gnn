@@ -14,8 +14,7 @@ from cggnn.train import infer_with_model
 def unify_importance(graphs: List[DGLGraph], model: CellGraphModel) -> Dict[int, float]:
     """Merge the importance values for each cell in a specimen."""
     probs = infer_with_model(model, graphs, return_probability=True)
-    hs_id_to_importances: Dict[int,
-                               List[Tuple[float, float]]] = DefaultDict(list)
+    hs_id_to_importances: Dict[int, List[Tuple[float, float]]] = DefaultDict(list)
     for i_graph, graph in enumerate(graphs):
         for i in range(graph.num_nodes()):
             hs_id_to_importances[graph.ndata[INDICES][i].item()].append(

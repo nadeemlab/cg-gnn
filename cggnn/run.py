@@ -7,6 +7,7 @@ from typing import Dict, Tuple, List, Literal, Optional
 from pandas import DataFrame
 from dgl import DGLGraph
 
+from cggnn.util import CellGraphModel
 from cggnn.util.constants import TRAIN_VALIDATION_TEST
 from cggnn.generate_graphs import generate_graphs
 from cggnn.train import train
@@ -16,8 +17,8 @@ from cggnn.explain import explain_cell_graphs
 def run(df_cell: DataFrame,
         df_label: DataFrame,
         label_to_result: Dict[int, str],
-        channel_symbols_by_column_name: Dict[str, str],
-        phenotype_symbols_by_column_name: Dict[str, str],
+        use_channels: bool = True,
+        use_phenotypes: bool = True,
         validation_data_percent: int = 15,
         test_data_percent: int = 15,
         roi_side_length: int = 600,
@@ -29,11 +30,12 @@ def run(df_cell: DataFrame,
         explainer: str = 'pp',
         merge_rois: bool = True,
         prune_misclassified: bool = True
-        ) -> None:
+        ) -> Tuple[CellGraphModel, Dict[int, float]]:
     """Run the SPT CG-GNN pipeline on the given DataFrames and identifier-to-name dictionaries."""
     makedirs('tmp/', exist_ok=True)
-    graphs = generate_graphs(df_cell, df_label, validation_data_percent,
-                             test_data_percent, roi_side_length, target_column)
+    graphs, feature_names = generate_graphs(df_cell, df_label, validation_data_percent,
+                                            test_data_percent, roi_side_length, use_channels,
+                                            use_phenotypes, target_column)
 
     train_validation_test: Tuple[Tuple[List[DGLGraph], List[int]],
                                  Tuple[List[DGLGraph], List[int]],
@@ -49,7 +51,6 @@ def run(df_cell: DataFrame,
     model = train(train_validation_test, 'tmp/', epochs=epochs,
                   learning_rate=learning_rate, batch_size=batch_size, k_folds=k_folds)
 
-    columns = df_cell.columns.values
     i = -1
     while len(train_validation_test[i][0]) == 0:
         i -= 1
@@ -59,8 +60,7 @@ def run(df_cell: DataFrame,
     assert evaluation_set is not None
     explanations = explain_cell_graphs(
         graphs, model, explainer,
-        [channel_symbols_by_column_name[col] for col in columns if col.startswith('F')],
-        [phenotype_symbols_by_column_name[col] for col in columns if col.startswith('P')],
+        feature_names,
         merge_rois=merge_rois,
         prune_misclassified=prune_misclassified,
         cell_graph_names=[d.name for d in graphs
@@ -73,3 +73,5 @@ def run(df_cell: DataFrame,
     for class_pair, df in explanations[2].items():
         df.to_csv(f'out/separability_k_best_{class_pair}.csv')
     rmtree('tmp/')
+
+    return model, explanations[3]

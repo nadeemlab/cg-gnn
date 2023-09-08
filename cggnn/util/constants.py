@@ -1,8 +1,7 @@
 """Consistent names for dict field strings."""
 
 INDICES = 'histological_structure'
-CHANNELS = 'channels'
-PHENOTYPES = 'phenotypes'
+FEATURES = 'features'
 CENTROIDS = 'centroid'
 IMPORTANCES = 'importance'
 TRAIN_VALIDATION_TEST = ('train', 'validation', 'test')

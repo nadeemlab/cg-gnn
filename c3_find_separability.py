@@ -2,6 +2,8 @@
 
 from argparse import ArgumentParser
 
+from numpy import genfromtxt
+
 from cggnn.explain import calculate_separability
 from cggnn.util import load_cell_graphs, load_feature_names, instantiate_model
 
@@ -16,6 +18,12 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
+        '--feature_names_path',
+        type=str,
+        help='Path to the list of feature names.',
+        required=True
+    )
+    parser.add_argument(
         '--model_checkpoint_path',
         type=str,
         help='Path to the model checkpoint.',
@@ -25,18 +33,6 @@ def parse_arguments():
         '--spt_hdf_cell_filename',
         type=str,
         help='Where to find the data for cells to lookup channel and phenotype names.',
-        required=True
-    )
-    parser.add_argument(
-        '--channel_names_by_column_name_path',
-        type=str,
-        help='Path to JSON translating cell DataFrame channel names to readable symbols.',
-        required=True
-    )
-    parser.add_argument(
-        '--phenotype_names_by_column_name_path',
-        type=str,
-        help='Path to JSON translating cell DataFrame phenotype names to readable symbols.',
         required=True
     )
     parser.add_argument(
@@ -60,15 +56,11 @@ if __name__ == "__main__":
     cell_graphs = [d.graph for d in cell_graphs_data]
     cell_graph_labels = [d.label for d in cell_graphs_data]
     cell_graph_combo = (cell_graphs, cell_graph_labels)
-    channel_names, phenotype_names = load_feature_names(args.spt_hdf_cell_filename,
-                                                        args.channel_names_by_column_name_path,
-                                                        args.phenotype_names_by_column_name_path)
+    feature_names = genfromtxt(args.feature_names_path, dtype=str).tolist()
     df_concept, df_aggregated, dfs_k_dist = calculate_separability(
         cell_graph_combo,
-        instantiate_model(
-            cell_graph_combo, model_checkpoint_path=args.model_checkpoint_path),
-        channel_names,
-        phenotype_names,
+        instantiate_model(cell_graph_combo, model_checkpoint_path=args.model_checkpoint_path),
+        feature_names,
         prune_misclassified=args.prune_misclassified,
         out_directory=args.output_directory)
     print(df_concept)

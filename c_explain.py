@@ -2,9 +2,10 @@
 
 from argparse import ArgumentParser
 
+from numpy import genfromtxt
+
 from cggnn.explain import explain_cell_graphs
-from cggnn.util import load_cell_graphs, instantiate_model, load_label_to_result, \
-    load_feature_names
+from cggnn.util import load_cell_graphs, instantiate_model, load_label_to_result
 
 
 def parse_arguments():
@@ -14,6 +15,12 @@ def parse_arguments():
         '--cg_path',
         type=str,
         help='Path to the cell graphs.',
+        required=True
+    )
+    parser.add_argument(
+        '--feature_names_path',
+        type=str,
+        help='Path to the list of feature names.',
         required=True
     )
     parser.add_argument(
@@ -33,18 +40,6 @@ def parse_arguments():
         '--spt_hdf_cell_filename',
         type=str,
         help='Where to find the data for cells to lookup channel and phenotype names.',
-        required=True
-    )
-    parser.add_argument(
-        '--channel_names_by_column_name_path',
-        type=str,
-        help='Path to JSON translating cell DataFrame channel names to readable symbols.',
-        required=True
-    )
-    parser.add_argument(
-        '--phenotype_names_by_column_name_path',
-        type=str,
-        help='Path to JSON translating cell DataFrame phenotype names to readable symbols.',
         required=True
     )
     parser.add_argument(
@@ -78,16 +73,13 @@ if __name__ == "__main__":
     cell_graphs_data = load_cell_graphs(args.cg_path)
     cell_graphs = [d.graph for d in cell_graphs_data]
     cell_graph_combo = (cell_graphs, [d.label for d in cell_graphs_data])
-    channel_names, phenotype_names = load_feature_names(args.spt_hdf_cell_filename,
-                                                        args.channel_names_by_column_name_path,
-                                                        args.phenotype_names_by_column_name_path)
+    feature_names = genfromtxt(args.feature_names_path, dtype=str).tolist()
     df_concept, df_aggregated, dfs_k_dist, importances = explain_cell_graphs(
         cell_graphs_data,
         instantiate_model(cell_graph_combo,
                           model_checkpoint_path=args.model_checkpoint_path),
         args.explainer,
-        channel_names,
-        phenotype_names,
+        feature_names,
         merge_rois=args.merge_rois,
         prune_misclassified=args.prune_misclassified,
         cell_graph_names=[d.name for d in cell_graphs_data] if (

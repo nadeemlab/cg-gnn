@@ -12,8 +12,6 @@ from itertools import combinations, compress
 from re import sub
 from typing import List, Optional, Tuple, Dict, Union
 
-from tqdm import tqdm
-from torch import FloatTensor
 from torch.cuda import is_available
 from dgl import DGLGraph
 from sklearn.preprocessing import minmax_scale
@@ -27,7 +25,7 @@ from pandas import DataFrame
 from matplotlib.pyplot import plot, title, savefig, legend, clf
 
 from cggnn.util import CellGraphModel
-from cggnn.util.constants import CHANNELS, PHENOTYPES, IMPORTANCES
+from cggnn.util.constants import FEATURES, IMPORTANCES
 from cggnn.train import infer_with_model
 
 
@@ -62,7 +60,7 @@ class AttributeSeparability:
         importance_list: List[NDArray],
         attribute_list: List[NDArray],
         label_list: List[int],
-        attribute_names: List[str]
+        feature_names: List[str]
     ) -> Tuple[Dict[Tuple[int, int], Dict[str, float]],
                Dict[int, Dict[int, NDArray]],
                Dict[Tuple[int, int], Dict[int, Tuple[int, float]]]]:
@@ -95,7 +93,7 @@ class AttributeSeparability:
             all_aucs[self.class_pairs[class_pair_id]] = {}
             k_max_dist[self.class_pairs[class_pair_id]] = {}
             for attr_id in range(n_attrs):
-                attr_name = attribute_names[attr_id]
+                attr_name = feature_names[attr_id]
                 all_aucs[self.class_pairs[class_pair_id]][attr_name] = auc(
                     array(self.keep_nuclei_list) /
                     max(self.keep_nuclei_list),
@@ -346,8 +344,7 @@ def _misclassified(cell_graphs: List[DGLGraph],
 
 def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
                            model: CellGraphModel,
-                           channel_names: List[str],
-                           phenotype_names: List[str],
+                           feature_names: List[str],
                            prune_misclassified: bool = True,
                            concept_grouping: Optional[Dict[str,
                                                            List[str]]] = None,
@@ -356,18 +353,13 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
                            out_directory: Optional[str] = None
                            ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame]]:
     """Generate separability scores for each concept."""
-    # Get the importance scores, labels, channels, and phenotypes from all cell graphs
-    importance_scores = [graph.ndata[IMPORTANCES]
-                         for graph in cell_graphs_and_labels[0]]
+    # Get the importance scores, labels, and features from all cell graphs
+    importance_scores = [graph.ndata[IMPORTANCES] for graph in cell_graphs_and_labels[0]]
     labels = cell_graphs_and_labels[1]
-    attributes = [concatenate((channels, phenotypes), axis=1) for channels, phenotypes in zip(
-        [graph.ndata[CHANNELS] for graph in cell_graphs_and_labels[0]],
-        [graph.ndata[PHENOTYPES] for graph in cell_graphs_and_labels[0]]
-    )]
-    attribute_names = channel_names + phenotype_names
+    features = [graph.ndata[FEATURES] for graph in cell_graphs_and_labels[0]]
 
-    assert len(importance_scores) == len(labels) == len(attributes)
-    assert attributes[0].shape[1] == len(attribute_names)
+    assert len(importance_scores) == len(labels) == len(features)
+    assert features[0].shape[1] == len(feature_names)
 
     classes = sort(unique(labels)).tolist()
     if max(labels) + 1 != len(classes):
@@ -384,34 +376,34 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
     if prune_misclassified:
         mask = _misclassified(cell_graphs_and_labels[0], labels, model)
         importance_scores = list(compress(importance_scores, mask))
-        attributes = list(compress(attributes, mask))
+        features = list(compress(features, mask))
         labels = list(compress(labels, mask))
 
     # Compute separability scores
-    least_cells = attributes[0].shape[0]
-    for graph_attribute in attributes:
+    least_cells = features[0].shape[0]
+    for graph_attribute in features:
         if graph_attribute.shape[0] < least_cells:
             least_cells = graph_attribute.shape[0]
     separability_calculator = AttributeSeparability(
         classes, list(range(1, least_cells, max((1, round(least_cells/100))))))
     separability_scores, all_histograms, k_max_dist = separability_calculator.process(
         importance_list=importance_scores,
-        attribute_list=attributes,
+        attribute_list=features,
         label_list=labels,
-        attribute_names=attribute_names
+        feature_names=feature_names
     )
 
     # Plot histograms
     if out_directory is not None:
         makedirs(out_directory, exist_ok=True)
-        for i, attribute_name in enumerate(attribute_names):
+        for i, attribute_name in enumerate(feature_names):
             plot_histogram(all_histograms, out_directory, i, attribute_name,
                            k=25 if 25 in all_histograms else max(tuple(all_histograms.keys())))
 
     # Compute final qualitative metrics
     if concept_grouping is None:
         # If not explicitly provided, each attribute will be its own concept
-        concept_grouping = {cn: [cn] for cn in attribute_names}
+        concept_grouping = {cn: [cn] for cn in feature_names}
     metric_analyser = SeparabilityAggregator(
         separability_scores, concept_grouping)
     df_aggregated = DataFrame({
@@ -429,6 +421,6 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
         k_max_dist_dfs[class_pair] = DataFrame(
             {'k': [dat[0] for dat in k_data.values()],
              'dist': [dat[1] for dat in k_data.values()]},
-            index=[attribute_names[i] for i in k_data.keys()])
+            index=[feature_names[i] for i in k_data.keys()])
 
     return DataFrame(metric_analyser.separability_scores), df_aggregated, k_max_dist_dfs

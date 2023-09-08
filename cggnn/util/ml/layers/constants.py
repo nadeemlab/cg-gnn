@@ -5,7 +5,7 @@ from torch.nn import ReLU, Tanh, Sigmoid, ELU, LeakyReLU, PReLU
 import dgl
 import numpy as np
 
-from cggnn.util.constants import CHANNELS
+from cggnn.util.constants import FEATURES, CENTROIDS
 
 
 ACTIVATIONS = {
@@ -19,12 +19,12 @@ ACTIVATIONS = {
 
 
 GNN_MSG = 'gnn_msg'
-GNN_NODE_FEAT_IN = CHANNELS
+GNN_NODE_FEAT_IN = FEATURES
 GNN_NODE_FEAT_OUT = 'gnn_node_feat_out'
 GNN_AGG_MSG = 'gnn_agg_msg'
 GNN_EDGE_WEIGHT = 'gnn_edge_weight'
 GNN_EDGE_FEAT = 'gnn_edge_feat'
-CENTROID = 'centroid'
+CENTROID = CENTROIDS
 
 
 AVAILABLE_LAYER_TYPES = {
