@@ -317,7 +317,7 @@ def generate_graphs(df_cell: DataFrame,
         raise ValueError("Test set percentage must be between 0 and 100.")
     if not 0 <= validation_data_percent + test_data_percent < 100:
         raise ValueError(
-            "Remaining data set percentage for training use must be between 0 and 50.")
+            "Remaining data set percentage for training use must be between 0 and 100.")
     p_validation: float = validation_data_percent/100
     p_test: float = test_data_percent/100
     roi_size: Tuple[int, int] = (roi_side_length, roi_side_length)

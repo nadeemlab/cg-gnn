@@ -30,12 +30,6 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--spt_hdf_cell_filename',
-        type=str,
-        help='Where to find the data for cells to lookup channel and phenotype names.',
-        required=True
-    )
-    parser.add_argument(
         '--prune_misclassified',
         help='Remove entries for misclassified cell graphs when calculating separability scores.',
         action='store_true'

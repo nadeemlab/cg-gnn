@@ -37,12 +37,6 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--spt_hdf_cell_filename',
-        type=str,
-        help='Where to find the data for cells to lookup channel and phenotype names.',
-        required=True
-    )
-    parser.add_argument(
         '--merge_rois',
         help='Merge ROIs together by specimen.',
         action='store_true'
@@ -59,9 +53,9 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
-        '--out_directory',
+        '--output_directory',
         type=str,
-        help='Where to save the output graph visualizations.',
+        help='Where to save the output reporting.',
         default=None,
         required=False
     )
@@ -83,9 +77,9 @@ if __name__ == "__main__":
         merge_rois=args.merge_rois,
         prune_misclassified=args.prune_misclassified,
         cell_graph_names=[d.name for d in cell_graphs_data] if (
-            args.out_directory is not None) else None,
+            args.output_directory is not None) else None,
         label_to_result=load_label_to_result(args.label_to_result_path),
-        out_directory=args.out_directory
+        out_directory=args.output_directory
     )
 
     print('')

@@ -26,12 +26,6 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--spt_hdf_cell_filename',
-        type=str,
-        help='Where to find the data for cells to lookup channel and phenotype names.',
-        required=True
-    )
-    parser.add_argument(
         '--merge_rois',
         help='Merge ROIs together by specimen.',
         action='store_true'
