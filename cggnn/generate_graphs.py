@@ -31,7 +31,7 @@ def _create_graphs_from_spt(df_cell: DataFrame,
                             ) -> Tuple[Dict[int, Dict[str, List[DGLGraph]]], Dict[DGLGraph, str],
                                        List[str]]:
     """Create graphs from cell and label files created from SPT."""
-    if df_label['result'].nunique() < 2:
+    if df_label['label'].nunique() < 2:
         raise ValueError('Less than two unique labels. No point to training.')
     if (not use_channels) and (not use_phenotypes):
         raise ValueError('Must use at least one of channels or phenotypes.')
@@ -72,14 +72,12 @@ def _create_graphs_from_spt(df_cell: DataFrame,
         else:
             proportion_of_target = 1.
             df_target = df_specimen
-        distance_square = squareform(
-            pdist(df_target[['pixel x', 'pixel y']]))
+        distance_square = squareform(pdist(df_target[['pixel x', 'pixel y']]))
         slide_area = prod(slide_size)
 
         # Create as many ROIs such that the total area of the ROIs will equal the area of the source
         # image times the proportion of cells on that image that have the target phenotype
-        n_rois = round(
-            proportion_of_target * slide_area / roi_area)
+        n_rois = round(proportion_of_target * slide_area / roi_area)
         while (len(bounding_boxes) < n_rois) and (df_target.shape[0] > 0):
             p_dist = percentile(distance_square, proportion_of_target, axis=0)
             x, y = df_specimen.iloc[argmin(p_dist), :][['pixel x', 'pixel y']].tolist()
@@ -97,16 +95,15 @@ def _create_graphs_from_spt(df_cell: DataFrame,
             # Log the new bounding box and track which and how many cells haven't been captured yet
             bounding_boxes.append((x_min, x_max, y_min, y_max, x, y))
             proportion_of_target -= roi_area / slide_area
-            cells_not_yet_captured = ~(df_target['pixel x'].between(
-                x_min, x_max) & df_target['pixel y'].between(y_min, y_max))
+            cells_not_yet_captured = ~(df_target['pixel x'].between(x_min, x_max) &
+                                       df_target['pixel y'].between(y_min, y_max))
             df_target = df_target.loc[cells_not_yet_captured, :]
-            distance_square = distance_square[cells_not_yet_captured,
-                                              :][:, cells_not_yet_captured]
+            distance_square = distance_square[cells_not_yet_captured, :][:, cells_not_yet_captured]
 
         # Create features, centroid, and label arrays and then the graph
         for i, (x_min, x_max, y_min, y_max, x, y) in enumerate(bounding_boxes):
-            df_roi: DataFrame = df_specimen.loc[df_specimen['pixel x'].between(
-                x_min, x_max) & df_specimen['pixel y'].between(y_min, y_max), ]
+            df_roi: DataFrame = df_specimen.loc[df_specimen['pixel x'].between(x_min, x_max) &
+                                                df_specimen['pixel y'].between(y_min, y_max), ]
             centroids = df_roi[['pixel x', 'pixel y']].values
             features = df_roi[features_to_use].astype(int).values
             graph_instance = _create_graph(
@@ -119,7 +116,7 @@ def _create_graphs_from_spt(df_cell: DataFrame,
     # Split the graphs by specimen and label
     graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]]] = DefaultDict(dict)
     for specimen, graphs in graphs_by_specimen.items():
-        label = df_label.loc[specimen, 'result']
+        label = df_label.loc[specimen, 'label']
         graphs_by_label_and_specimen[label][specimen] = graphs
     return graphs_by_label_and_specimen, roi_names, features_to_use
 
@@ -333,9 +330,8 @@ def generate_graphs(df_cell: DataFrame,
         for set_type in TRAIN_VALIDATION_TEST:
             directory = join(output_directory, set_type)
             if isdir(directory) and (len(listdir(directory)) > 0):
-                raise RuntimeError(
-                    f'{set_type} set directory has already been created. '
-                    'Assuming work is done and terminating.')
+                raise RuntimeError(f'{set_type} set directory has already been created. '
+                                   'Assuming work is done and terminating.')
             set_directories.append(directory)
 
             # Ensure directory exists IFF graphs are going in it
@@ -373,8 +369,8 @@ def generate_graphs(df_cell: DataFrame,
             for graph_instance in graphs:
                 label = graph_to_label[graph_instance]
                 name = graph_names[graph_instance]
-                graphs_data.append(GraphData(graph_instance, label,
-                                             name, specimen, TRAIN_VALIDATION_TEST[i]))
+                graphs_data.append(GraphData(graph_instance, label, name, specimen,
+                                             TRAIN_VALIDATION_TEST[i]))
                 if output_directory is not None:
                     save_graphs(join(specimen_directory, name + '.bin'),
                                 [graph_instance],
