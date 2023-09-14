@@ -49,7 +49,7 @@ def parse_arguments():
         '--learning_rate',
         type=float,
         help='Learning rate to use during training.',
-        default=10e-3,
+        default=1e-3,
         required=False
     )
     parser.add_argument(
