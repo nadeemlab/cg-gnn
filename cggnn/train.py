@@ -54,13 +54,10 @@ def _create_datasets(
     k_folds: int = 3
 ) -> Tuple[CGDataset, Optional[CGDataset], Optional[CGDataset], Optional[KFold]]:
     """Make the cell and/or tissue graph datasets and the k-fold if necessary."""
-    train_dataset = _create_dataset(
-        cell_graph_sets[0][0], cell_graph_sets[0][1], in_ram)
+    train_dataset = _create_dataset(cell_graph_sets[0][0], cell_graph_sets[0][1], in_ram)
     assert train_dataset is not None
-    validation_dataset = _create_dataset(
-        cell_graph_sets[1][0], cell_graph_sets[1][1], in_ram)
-    test_dataset = _create_dataset(
-        cell_graph_sets[2][0], cell_graph_sets[2][1], in_ram)
+    validation_dataset = _create_dataset(cell_graph_sets[1][0], cell_graph_sets[1][1], in_ram)
+    test_dataset = _create_dataset(cell_graph_sets[2][0], cell_graph_sets[2][1], in_ram)
 
     if (k_folds > 0) and (validation_dataset is not None):
         # stack train and validation datasets if both exist and k-fold cross validation is on
@@ -180,26 +177,22 @@ def _validation_step(model: CellGraphModel,
         loss = loss_fn(all_validation_logits, all_validation_labels).item()
     if loss < best_validation_loss:
         best_validation_loss = loss
-        save(model.state_dict(), join(
-            model_path, 'model_best_validation_loss.pt'))
+        save(model.state_dict(), join(model_path, 'model_best_validation_loss.pt'))
 
     # compute & store accuracy + model
     all_validation_predictions = all_validation_predictions.detach().numpy()
     all_validation_labels = all_validation_labels.detach().numpy()
-    accuracy = accuracy_score(all_validation_labels,
-                              all_validation_predictions)
+    accuracy = accuracy_score(all_validation_labels, all_validation_predictions)
     if accuracy > best_validation_accuracy:
         best_validation_accuracy = accuracy
-        save(model.state_dict(), join(
-            model_path, 'model_best_validation_accuracy.pt'))
+        save(model.state_dict(), join(model_path, 'model_best_validation_accuracy.pt'))
 
     # compute & store weighted f1-score + model
     weighted_f1_score = f1_score(
         all_validation_labels, all_validation_predictions, average='weighted')
     if weighted_f1_score > best_validation_weighted_f1_score:
         best_validation_weighted_f1_score = weighted_f1_score
-        save(model.state_dict(), join(
-            model_path, 'model_best_validation_weighted_f1_score.pt'))
+        save(model.state_dict(), join(model_path, 'model_best_validation_weighted_f1_score.pt'))
 
     print(f'Validation loss {loss}')
     print(f'Validation weighted F1 score {weighted_f1_score}')
@@ -231,8 +224,7 @@ def _test_model(model: CellGraphModel,
 
         print(f'\n*** Start testing w/ {metric} model ***')
 
-        model_name = [f for f in listdir(
-            model_path) if f.endswith(".pt") and metric in f][0]
+        model_name = [f for f in listdir(model_path) if f.endswith(".pt") and metric in f][0]
         checkpoint = load(join(model_path, model_name))
         model.load_state_dict(checkpoint)
 
@@ -263,12 +255,10 @@ def _test_model(model: CellGraphModel,
             max_acc_model_checkpoint = checkpoint
 
         # compute & store weighted f1-score
-        weighted_f1_score = f1_score(
-            all_test_labels, all_test_preds, average='weighted')
+        weighted_f1_score = f1_score(all_test_labels, all_test_preds, average='weighted')
 
         # compute and store classification report
-        report = classification_report(
-            all_test_labels, all_test_preds, digits=4)
+        report = classification_report(all_test_labels, all_test_preds, digits=4)
         out_path = join(model_path, 'classification_report.txt')
         with open(out_path, "w", encoding='utf-8') as f:
             f.write(report)
@@ -287,12 +277,11 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
           output_directory: str,
           in_ram: bool = True,
           epochs: int = 10,
-          learning_rate: float = 10e-3,
+          learning_rate: float = 1e-3,
           batch_size: int = 1,
           k_folds: int = 0,
           gnn_parameters: Dict[str, Any] = DEFAULT_GNN_PARAMETERS,
-          classification_parameters: Dict[str,
-                                          Any] = DEFAULT_CLASSIFICATION_PARAMETERS
+          classification_parameters: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMETERS
           ) -> CellGraphModel:
     """Train CG-GNN."""
     output_directory = _set_save_path(output_directory)
@@ -342,8 +331,7 @@ def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
 
     # testing loop
     if test_dataset is not None:
-        model = _test_model(model, test_dataset, batch_size,
-                            loss_fn, output_directory, step)
+        model = _test_model(model, test_dataset, batch_size, loss_fn, output_directory, step)
 
     return model
 
@@ -379,8 +367,7 @@ def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
           in_ram: bool = True,
           batch_size: int = 1,
           gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMETERS,
-          classification_params: Dict[str,
-                                      Any] = DEFAULT_CLASSIFICATION_PARAMETERS
+          classification_params: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMETERS
           ) -> None:
     """Test CG-GNN.
 
@@ -394,17 +381,14 @@ def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
                               model_checkpoint_path=model_checkpoint_path)
 
     # print # of parameters
-    pytorch_total_params = sum(p.numel()
-                               for p in model.parameters() if p.requires_grad)
+    pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(pytorch_total_params)
 
-    all_test_preds = infer_with_model(
-        model, cell_graphs[0], in_ram, batch_size)
+    all_test_preds = infer_with_model(model, cell_graphs[0], in_ram, batch_size)
     all_test_labels = array(cell_graphs[1])
 
     accuracy = accuracy_score(all_test_labels, all_test_preds)
-    weighted_f1_score = f1_score(
-        all_test_labels, all_test_preds, average='weighted')
+    weighted_f1_score = f1_score(all_test_labels, all_test_preds, average='weighted')
     report = classification_report(all_test_labels, all_test_preds)
 
     print(f'Test weighted F1 score {weighted_f1_score}')
