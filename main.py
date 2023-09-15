@@ -2,7 +2,10 @@
 
 from argparse import ArgumentParser
 
+from pandas import read_hdf  # type: ignore
+
 from cggnn import run
+from cggnn.util import load_label_to_result
 
 
 def parse_arguments():
@@ -50,11 +53,26 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
-        '--target_column',
+        '--disable_channels',
+        action='store_true',
+        help='Disable the use of channel information in the graph.',
+    )
+    parser.add_argument(
+        '--disable_phenotypes',
+        action='store_true',
+        help='Disable the use of phenotype information in the graph.',
+    )
+    parser.add_argument(
+        '--target_name',
         type=str,
-        help='Phenotype column to use to build ROIs around.',
+        help='If given, build ROIs based only on cells with true values in this DataFrame column.',
         default=None,
         required=False
+    )
+    parser.add_argument(
+        '--in_ram',
+        help='If the data should be stored in RAM.',
+        action='store_true',
     )
     parser.add_argument(
         '-b',
@@ -110,16 +128,19 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    run(args.spt_hdf_cell_filename,
-        args.spt_hdf_label_filename,
-        args.label_to_result_path,
+    run(read_hdf(args.spt_hdf_cell_filename),  # type: ignore
+        read_hdf(args.spt_hdf_label_filename),  # type: ignore
+        load_label_to_result(args.label_to_result_path),
         args.validation_data_percent,
         args.test_data_percent,
         args.roi_side_length,
-        args.target_column,
-        args.batch_size,
+        not args.disable_channels,
+        not args.disable_phenotypes,
+        args.target_name,
+        args.in_ram,
         args.epochs,
         args.learning_rate,
+        args.batch_size,
         args.k_folds,
         args.explainer,
         args.merge_rois,

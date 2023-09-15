@@ -17,17 +17,18 @@ from cggnn.explain import explain_cell_graphs
 def run(df_cell: DataFrame,
         df_label: DataFrame,
         label_to_result: Dict[int, str],
+        validation_data_percent: int = 0,
+        test_data_percent: int = 15,
+        roi_side_length: int = 1000,
         use_channels: bool = True,
         use_phenotypes: bool = True,
-        validation_data_percent: int = 15,
-        test_data_percent: int = 15,
-        roi_side_length: int = 600,
-        target_column: Optional[str] = None,
-        batch_size: int = 1,
+        target_name: Optional[str] = None,
+        in_ram: bool = True,
         epochs: int = 10,
-        learning_rate: float = 10e-3,
+        learning_rate: float = 1e-3,
+        batch_size: int = 1,
         k_folds: int = 0,
-        explainer: str = 'pp',
+        explainer_model: str = 'pp',
         merge_rois: bool = True,
         prune_misclassified: bool = True
         ) -> Tuple[CellGraphModel, Dict[int, float]]:
@@ -35,7 +36,7 @@ def run(df_cell: DataFrame,
     makedirs('tmp/', exist_ok=True)
     graphs, feature_names = generate_graphs(df_cell, df_label, validation_data_percent,
                                             test_data_percent, roi_side_length, use_channels,
-                                            use_phenotypes, target_column)
+                                            use_phenotypes, target_name)
 
     train_validation_test: Tuple[Tuple[List[DGLGraph], List[int]],
                                  Tuple[List[DGLGraph], List[int]],
@@ -48,7 +49,7 @@ def run(df_cell: DataFrame,
             i_set = 2
         train_validation_test[i_set][0].append(graph_datum.graph)
         train_validation_test[i_set][1].append(graph_datum.label)
-    model = train(train_validation_test, 'tmp/', epochs=epochs,
+    model = train(train_validation_test, 'tmp/', in_ram=in_ram, epochs=epochs,
                   learning_rate=learning_rate, batch_size=batch_size, k_folds=k_folds)
 
     i = -1
@@ -59,14 +60,14 @@ def run(df_cell: DataFrame,
     evaluation_set = train_validation_test[i]
     assert evaluation_set is not None
     explanations = explain_cell_graphs(
-        graphs, model, explainer,
+        graphs, model, explainer_model,
         feature_names,
         merge_rois=merge_rois,
         prune_misclassified=prune_misclassified,
         cell_graph_names=[d.name for d in graphs
                           if d.train_validation_test == TRAIN_VALIDATION_TEST[i]],
         label_to_result=label_to_result,
-        out_directory='out/')
+        output_directory='out/')
 
     explanations[0].to_csv('out/separability_concept.csv')
     explanations[1].to_csv('out/separability_attribute.csv')

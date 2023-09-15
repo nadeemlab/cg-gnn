@@ -25,13 +25,11 @@ def _make_bokeh_graph_plot(graph: DiGraph,
     """Create bokeh interactive graph visualization."""
     # Create bokeh plot and prepare to save it to file
     graph_name = graph_name.split('/')[-1]
-    output_file(join(out_directory, graph_name + '.html'),
-                title=graph_name)
-    f = figure(match_aspect=True, tools=[
-        'pan', 'wheel_zoom', 'reset'], title=graph_name)
+    output_file(join(out_directory, graph_name + '.html'), title=graph_name)
+    f = figure(match_aspect=True, tools=['pan', 'wheel_zoom', 'reset'], title=graph_name)
     f.toolbar.active_scroll = f.select_one(WheelZoomTool)
-    mapper = linear_cmap(  # colors nodes according to importance by default
-        'importance', palette=YlOrRd8[::-1], low=0, high=1)
+    # colors nodes according to importance by default
+    mapper = linear_cmap('importance', palette=YlOrRd8[::-1], low=0, high=1)
     plot = from_networkx(graph, {
         i_node: dat for i_node, dat in get_node_attributes(graph, 'centroid').items()})
     plot.node_renderer.glyph = Circle(
@@ -43,11 +41,9 @@ def _make_bokeh_graph_plot(graph: DiGraph,
     f.add_layout(colorbar, 'right')
 
     # Define data that shows when hovering over a node/cell
-    hover = HoverTool(
-        tooltips="h. structure: $index", renderers=[plot.node_renderer])
+    hover = HoverTool(tooltips="h. structure: $index", renderers=[plot.node_renderer])
     hover.callback = CustomJS(
-        args=dict(hover=hover,
-                  source=plot.node_renderer.data_source),
+        args=dict(hover=hover, source=plot.node_renderer.data_source),
         code='const feats = ["' + '", "'.join(feature_names) + '"];' +
         """
         if (cb_data.index.indices.length > 0) {
@@ -55,12 +51,15 @@ def _make_bokeh_graph_plot(graph: DiGraph,
             const tooltips = [['h. structure', '$index']];
             for (const feat_name of feats) {
                 if (source.data[feat_name][node_index]) {
-                    tooltips.push([`${feat_name}`, `@${feat_name}`]);
+                    tooltips.push([`${feat_name}`, `@{${feat_name}}`]);
                 }
             }
             hover.tooltips = tooltips;
         }
-    """)
+    """
+    )
+    # ${blah} evaluates blah in javascript, so `@{${blah}}` comes out to "@{evaluated_blah}"
+    # @{Some Thing} is how to refer to a column named "Some Thing" in Bokeh's data source
 
     # Add interactive dropdown to change why field nodes are colored by
     color_select = Select(title='Color by property', value='importance',

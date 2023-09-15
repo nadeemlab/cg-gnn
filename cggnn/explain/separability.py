@@ -10,7 +10,7 @@ from os import makedirs
 from os.path import join
 from itertools import combinations, compress
 from re import sub
-from typing import List, Optional, Tuple, Dict, Union
+from typing import List, Optional, Tuple, Dict, Union, Any
 
 from torch.cuda import is_available
 from dgl import DGLGraph
@@ -21,7 +21,7 @@ from numpy import (empty, argsort, array, max, concatenate, reshape, histogram, 
 from numpy.typing import NDArray
 from scipy.stats import wasserstein_distance
 from scipy.ndimage.filters import uniform_filter1d
-from pandas import DataFrame
+from pandas import DataFrame, Index
 from matplotlib.pyplot import plot, title, savefig, legend, clf
 
 from cggnn.util import CellGraphModel
@@ -345,13 +345,14 @@ def _misclassified(cell_graphs: List[DGLGraph],
 def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
                            model: CellGraphModel,
                            feature_names: List[str],
+                           label_to_result: Optional[Dict[int, str]] = None,
                            prune_misclassified: bool = True,
-                           concept_grouping: Optional[Dict[str,
-                                                           List[str]]] = None,
-                           risk: Optional[NDArray] = None,
-                           pathological_prior: Optional[NDArray] = None,
+                           concept_grouping: Optional[Dict[str, List[str]]] = None,
+                           risk: Optional[NDArray[Any]] = None,
+                           pathological_prior: Optional[NDArray[Any]] = None,
                            out_directory: Optional[str] = None
-                           ) -> Tuple[DataFrame, DataFrame, Dict[Tuple[int, int], DataFrame]]:
+                           ) -> Tuple[DataFrame, DataFrame,
+                                      Dict[Union[Tuple[int, int], Tuple[str, str]], DataFrame]]:
     """Generate separability scores for each concept."""
     # Get the importance scores, labels, and features from all cell graphs
     importance_scores = [graph.ndata[IMPORTANCES] for graph in cell_graphs_and_labels[0]]
@@ -395,6 +396,7 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
 
     # Plot histograms
     if out_directory is not None:
+        out_directory = join(out_directory, 'separability')
         makedirs(out_directory, exist_ok=True)
         for i, attribute_name in enumerate(feature_names):
             plot_histogram(all_histograms, out_directory, i, attribute_name,
@@ -416,11 +418,30 @@ def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[in
     if all(risk == risk[0]):
         df_aggregated.drop('agg_with_risk', axis=0, inplace=True)
 
-    k_max_dist_dfs: Dict[Tuple[int, int], DataFrame] = {}
+    dfs_k_max_distance: Dict[Tuple[int, int], DataFrame] = {}
     for class_pair, k_data in k_max_dist.items():
-        k_max_dist_dfs[class_pair] = DataFrame(
+        dfs_k_max_distance[class_pair] = DataFrame(
             {'k': [dat[0] for dat in k_data.values()],
              'dist': [dat[1] for dat in k_data.values()]},
             index=[feature_names[i] for i in k_data.keys()])
 
-    return DataFrame(metric_analyser.separability_scores), df_aggregated, k_max_dist_dfs
+    df_seperability_by_concept = DataFrame(metric_analyser.separability_scores)
+
+    if label_to_result is not None:
+        df_seperability_by_concept.columns = [
+            _class_pair_rephrase(class_pair, label_to_result) for class_pair in
+            df_seperability_by_concept.columns.values]
+        df_aggregated.set_index(Index(
+            (_class_pair_rephrase(class_pair, label_to_result)
+             if isinstance(class_pair, tuple) else class_pair
+             ) for class_pair in df_aggregated.index.values), inplace=True)
+        dfs_k_max_distance = {_class_pair_rephrase(
+            class_pair, label_to_result): df for class_pair, df in dfs_k_max_distance.items()}
+
+    return df_seperability_by_concept, df_aggregated, dfs_k_max_distance
+
+
+def _class_pair_rephrase(class_pair: Tuple[int, int],
+                         label_to_result: Dict[int, str]) -> Tuple[str, str]:
+    """Convert an int class pair to a tuple class pair."""
+    return tuple(label_to_result[label] for label in class_pair)

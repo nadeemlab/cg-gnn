@@ -56,9 +56,9 @@ def parse_arguments():
         help='Disable the use of phenotype information in the graph.',
     )
     parser.add_argument(
-        '--target_column',
+        '--target_name',
         type=str,
-        help='Phenotype column to use to build ROIs around.',
+        help='If given, build ROIs based only on cells with true values in this DataFrame column.',
         default=None,
         required=False
     )
@@ -81,5 +81,5 @@ if __name__ == "__main__":
                     args.roi_side_length,
                     not args.disable_channels,
                     not args.disable_phenotypes,
-                    args.target_column,
+                    args.target_name,
                     args.output_directory)

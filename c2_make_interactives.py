@@ -49,5 +49,5 @@ if __name__ == "__main__":
             graph_groups[g.specimen].append(g.graph)
         else:
             graph_groups[g.name].append(g.graph)
-    feature_names = genfromtxt(args.feature_names_path, dtype=str).tolist()
+    feature_names = genfromtxt(args.feature_names_path, dtype=str, delimiter=',').tolist()
     generate_interactives(graph_groups, feature_names, args.output_directory)

@@ -67,11 +67,10 @@ if __name__ == "__main__":
     cell_graphs_data = load_cell_graphs(args.cg_path)
     cell_graphs = [d.graph for d in cell_graphs_data]
     cell_graph_combo = (cell_graphs, [d.label for d in cell_graphs_data])
-    feature_names = genfromtxt(args.feature_names_path, dtype=str).tolist()
+    feature_names = genfromtxt(args.feature_names_path, dtype=str, delimiter=',').tolist()
     df_concept, df_aggregated, dfs_k_dist, importances = explain_cell_graphs(
         cell_graphs_data,
-        instantiate_model(cell_graph_combo,
-                          model_checkpoint_path=args.model_checkpoint_path),
+        instantiate_model(cell_graph_combo, model_checkpoint_path=args.model_checkpoint_path),
         args.explainer,
         feature_names,
         merge_rois=args.merge_rois,
@@ -79,7 +78,7 @@ if __name__ == "__main__":
         cell_graph_names=[d.name for d in cell_graphs_data] if (
             args.output_directory is not None) else None,
         label_to_result=load_label_to_result(args.label_to_result_path),
-        out_directory=args.output_directory
+        output_directory=args.output_directory
     )
 
     print('')

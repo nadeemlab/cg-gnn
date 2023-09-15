@@ -5,7 +5,7 @@ from argparse import ArgumentParser
 from numpy import genfromtxt
 
 from cggnn.explain import calculate_separability
-from cggnn.util import load_cell_graphs, load_feature_names, instantiate_model
+from cggnn.util import load_cell_graphs, instantiate_model, load_label_to_result
 
 
 def parse_arguments():
@@ -35,6 +35,12 @@ def parse_arguments():
         action='store_true'
     )
     parser.add_argument(
+        '--label_to_result_path',
+        type=str,
+        help='Where to find the data mapping label ints to their string results.',
+        required=False
+    )
+    parser.add_argument(
         '--output_directory',
         type=str,
         help='Where to save the output reporting.',
@@ -50,11 +56,12 @@ if __name__ == "__main__":
     cell_graphs = [d.graph for d in cell_graphs_data]
     cell_graph_labels = [d.label for d in cell_graphs_data]
     cell_graph_combo = (cell_graphs, cell_graph_labels)
-    feature_names = genfromtxt(args.feature_names_path, dtype=str).tolist()
+    feature_names = genfromtxt(args.feature_names_path, dtype=str, delimiter=',').tolist()
     df_concept, df_aggregated, dfs_k_dist = calculate_separability(
         cell_graph_combo,
         instantiate_model(cell_graph_combo, model_checkpoint_path=args.model_checkpoint_path),
         feature_names,
+        label_to_result=load_label_to_result(args.label_to_result_path),
         prune_misclassified=args.prune_misclassified,
         out_directory=args.output_directory)
     print(df_concept)
