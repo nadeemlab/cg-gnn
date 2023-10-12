@@ -39,13 +39,6 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
-        '--roi_side_length',
-        type=int,
-        help='Side length in pixels of the ROI areas we wish to generate.',
-        default=600,
-        required=False
-    )
-    parser.add_argument(
         '--disable_channels',
         action='store_true',
         help='Disable the use of channel information in the graph.',
@@ -54,6 +47,20 @@ def parse_arguments():
         '--disable_phenotypes',
         action='store_true',
         help='Disable the use of phenotype information in the graph.',
+    )
+    parser.add_argument(
+        '--roi_side_length',
+        type=int,
+        help='Side length in pixels of the ROI areas we wish to generate.',
+        default=None,
+        required=False
+    )
+    parser.add_argument(
+        '--cells_per_slide_target',
+        type=int,
+        help='Used with the median cell density across all slides to determine the ROI size.',
+        default=5_000,
+        required=False
     )
     parser.add_argument(
         '--target_name',
@@ -78,8 +85,9 @@ if __name__ == "__main__":
                     read_hdf(args.spt_hdf_label_filename),  # type: ignore
                     args.validation_data_percent,
                     args.test_data_percent,
-                    args.roi_side_length,
-                    not args.disable_channels,
-                    not args.disable_phenotypes,
-                    args.target_name,
-                    args.output_directory)
+                    use_channels=not args.disable_channels,
+                    use_phenotypes=not args.disable_phenotypes,
+                    roi_side_length=args.roi_side_length,
+                    cells_per_slide_target=args.cells_per_slide_target,
+                    target_name=args.target_name,
+                    output_directory=args.output_directory)

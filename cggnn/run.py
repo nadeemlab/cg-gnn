@@ -19,9 +19,10 @@ def run(df_cell: DataFrame,
         label_to_result: Dict[int, str],
         validation_data_percent: int = 0,
         test_data_percent: int = 15,
-        roi_side_length: int = 1000,
         use_channels: bool = True,
         use_phenotypes: bool = True,
+        roi_side_length: Optional[int] = None,
+        cells_per_slide_target: int = 5_000,
         target_name: Optional[str] = None,
         in_ram: bool = True,
         epochs: int = 10,
@@ -34,9 +35,15 @@ def run(df_cell: DataFrame,
         ) -> Tuple[CellGraphModel, Dict[int, float]]:
     """Run the SPT CG-GNN pipeline on the given DataFrames and identifier-to-name dictionaries."""
     makedirs('tmp/', exist_ok=True)
-    graphs, feature_names = generate_graphs(df_cell, df_label, validation_data_percent,
-                                            test_data_percent, roi_side_length, use_channels,
-                                            use_phenotypes, target_name)
+    graphs, feature_names = generate_graphs(df_cell,
+                                            df_label,
+                                            validation_data_percent,
+                                            test_data_percent,
+                                            use_channels=use_channels,
+                                            use_phenotypes=use_phenotypes,
+                                            roi_side_length=roi_side_length,
+                                            cells_per_slide_target=cells_per_slide_target,
+                                            target_name=target_name)
 
     train_validation_test: Tuple[Tuple[List[DGLGraph], List[int]],
                                  Tuple[List[DGLGraph], List[int]],

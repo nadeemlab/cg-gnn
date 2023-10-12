@@ -46,13 +46,6 @@ def parse_arguments():
         required=False
     )
     parser.add_argument(
-        '--roi_side_length',
-        type=int,
-        help='Side length in pixels of the ROI areas we wish to generate.',
-        default=600,
-        required=False
-    )
-    parser.add_argument(
         '--disable_channels',
         action='store_true',
         help='Disable the use of channel information in the graph.',
@@ -61,6 +54,20 @@ def parse_arguments():
         '--disable_phenotypes',
         action='store_true',
         help='Disable the use of phenotype information in the graph.',
+    )
+    parser.add_argument(
+        '--roi_side_length',
+        type=int,
+        help='Side length in pixels of the ROI areas we wish to generate.',
+        default=None,
+        required=False
+    )
+    parser.add_argument(
+        '--cells_per_slide_target',
+        type=int,
+        help='Used with the median cell density across all slides to determine the ROI size.',
+        default=5_000,
+        required=False
     )
     parser.add_argument(
         '--target_name',
@@ -131,17 +138,18 @@ if __name__ == "__main__":
     run(read_hdf(args.spt_hdf_cell_filename),  # type: ignore
         read_hdf(args.spt_hdf_label_filename),  # type: ignore
         load_label_to_result(args.label_to_result_path),
-        args.validation_data_percent,
-        args.test_data_percent,
-        args.roi_side_length,
-        not args.disable_channels,
-        not args.disable_phenotypes,
-        args.target_name,
-        args.in_ram,
-        args.epochs,
-        args.learning_rate,
-        args.batch_size,
-        args.k_folds,
-        args.explainer,
-        args.merge_rois,
-        args.prune_misclassified)
+        validation_data_percent=args.validation_data_percent,
+        test_data_percent=args.test_data_percent,
+        use_channels=not args.disable_channels,
+        use_phenotypes=not args.disable_phenotypes,
+        roi_side_length=args.roi_side_length,
+        cells_per_slide_target=args.cells_per_slide_target,
+        target_name=args.target_name,
+        in_ram=args.in_ram,
+        epochs=args.epochs,
+        learning_rate=args.learning_rate,
+        batch_size=args.batch_size,
+        k_folds=args.k_folds,
+        explainer_model=args.explainer,
+        merge_rois=args.merge_rois,
+        prune_misclassified=args.prune_misclassified)

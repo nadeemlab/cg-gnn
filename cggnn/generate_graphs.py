@@ -7,7 +7,7 @@ from warnings import warn
 from typing import Optional, Tuple, List, Dict, DefaultDict
 
 from torch import Tensor, FloatTensor, IntTensor  # pylint: disable=no-name-in-module
-from numpy import round, prod, percentile, argmin, nonzero, savetxt  # pylint: disable=redefined-builtin
+from numpy import rint, median, prod, percentile, argmin, nonzero, savetxt
 from numpy.typing import NDArray
 from dgl import DGLGraph, graph  # type: ignore
 from dgl.data.utils import save_graphs  # type: ignore
@@ -22,9 +22,11 @@ from cggnn.util.constants import CENTROIDS, FEATURES, INDICES, TRAIN_VALIDATION_
 
 def _create_graphs_from_spt(df_cell: DataFrame,
                             df_label: DataFrame,
-                            roi_size: Tuple[int, int],
                             use_channels: bool = True,
                             use_phenotypes: bool = True,
+                            roi_size: Optional[Tuple[int, int]] = None,
+                            cells_per_slide_target: Optional[int] = 5_000,
+                            max_cells_to_consider: int = 100_000,
                             target_name: Optional[str] = None,
                             n_neighbors: int = 5,
                             threshold: Optional[int] = None
@@ -50,37 +52,53 @@ def _create_graphs_from_spt(df_cell: DataFrame,
     if len(features_to_use) == 0:
         raise ValueError('No features to use.')
 
-    roi_area = prod(roi_size)
-
-    # Split the data by specimen (slide)
+    # Split the data by specimen (slide) and derive the roi_size from the average cell density if
+    # not provided
     graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
     roi_names: Dict[DGLGraph, str] = {}
+    grouped = df_cell.groupby('specimen')
+    if roi_size is not None:
+        roi_area = prod(roi_size)
+    elif cells_per_slide_target is not None:
+        roi_area: float = cells_per_slide_target / median([
+            (df_specimen.shape[0] /
+             prod(df_specimen[['pixel x', 'pixel y']].max() -
+                  df_specimen[['pixel x', 'pixel y']].min()))
+            for _, df_specimen in grouped
+        ])
+        roi_size = (rint(roi_area**0.5), rint(roi_area**0.5))
+    else:
+        raise ValueError('Must specify either roi_size or cells_per_slide_target.')
     print('Creating graphs for identified regions in each specimen...')
-    for specimen, df_specimen in tqdm(df_cell.groupby('specimen')):
+    for specimen, df_specimen in tqdm(grouped):
 
         # Skip specimens without labels
         if specimen not in df_label.index:
             continue
 
+        # Normalize slide coordinates
+        df_specimen[['pixel x', 'pixel y']] -= df_specimen[['pixel x', 'pixel y']].min()
+
         # Initialize data structures
         bounding_boxes: List[Tuple[int, int, int, int, int, int]] = []
         slide_size = df_specimen[['pixel x', 'pixel y']].max() + 100
         if target_name is not None:
-            # Invert the column to name dict to find the column name for the target
             proportion_of_target = df_specimen[target_name].sum()/df_specimen.shape[0]
             df_target = df_specimen.loc[df_specimen[target_name], :]
         else:
             proportion_of_target = 1.
             df_target = df_specimen
+        if df_target.shape[0] > max_cells_to_consider:
+            df_target = df_target.sample(max_cells_to_consider)
         distance_square = squareform(pdist(df_target[['pixel x', 'pixel y']]))
         slide_area = prod(slide_size)
 
         # Create as many ROIs such that the total area of the ROIs will equal the area of the source
         # image times the proportion of cells on that image that have the target phenotype
-        n_rois = round(proportion_of_target * slide_area / roi_area)
+        n_rois = rint(proportion_of_target * slide_area / roi_area)
         while (len(bounding_boxes) < n_rois) and (df_target.shape[0] > 0):
             p_dist = percentile(distance_square, proportion_of_target, axis=0)
-            x, y = df_specimen.iloc[argmin(p_dist), :][['pixel x', 'pixel y']].tolist()
+            x, y = df_target.iloc[argmin(p_dist), :][['pixel x', 'pixel y']].tolist()
             x_min = x - roi_size[0]//2
             x_max = x + roi_size[0]//2
             y_min = y - roi_size[1]//2
@@ -88,7 +106,7 @@ def _create_graphs_from_spt(df_cell: DataFrame,
 
             # Check that this bounding box contains enough cells to do nearest neighbors on
             if (df_specimen['pixel x'].between(x_min, x_max) &
-                    df_specimen['pixel y'].between(y_min, y_max)).shape[0] < n_neighbors + 1:
+                    df_specimen['pixel y'].between(y_min, y_max)).sum() < n_neighbors + 1:
                 # If not, terminate the ROI creation process early
                 break
 
@@ -262,9 +280,11 @@ def generate_graphs(df_cell: DataFrame,
                     df_label: DataFrame,
                     validation_data_percent: int,
                     test_data_percent: int,
-                    roi_side_length: int,
                     use_channels: bool = True,
                     use_phenotypes: bool = True,
+                    roi_side_length: Optional[int] = None,
+                    cells_per_slide_target: Optional[int] = 10_000,
+                    max_cells_to_consider: int = 100_000,
                     target_name: Optional[str] = None,
                     output_directory: Optional[str] = None
                     ) -> Tuple[List[GraphData], List[str]]:
@@ -289,16 +309,26 @@ def generate_graphs(df_cell: DataFrame,
         different train/validation/test sets.
         Set validation_data_percent to 0 if you want to do k-fold cross-validation later.
         (Training data percent is calculated from these two percentages.)
-    roi_side_length: int
-        How long to make the side length of each square ROI, in pixels.
     use_channels: bool = True
     use_phenotypes: bool = True
         Whether to include channel or phenotype features (columns in df_cell beginning with 'C ' and
         'P ', respectively) in the graph.
+    roi_side_length: Optional[int] = None
+    cells_per_slide_target: Optional[int] = 10_000
+        One of these must be provided in order to determine the ROI size. roi_side_length specifies
+        how long to make the side length of each square ROI, in pixels. If this isn't provided, the
+        median cell density across all slides is used with cells_per_slide_target to determine the
+        square ROI sizing.
+    max_cells_to_consider: int = 100_000
+        The maximum number of cells to consider when placing ROI bounds. All cells within each
+        boundary region will be included in the graph, but the ROI's center will be based on the
+        cell with the most and closest cells within the specified ROI size.
+        Empirically 350,000 works but 400,000 gives a 1.75 TB square and an out of memory error.
     target_name: Optional[str] = None
-        If provided, build ROIs based on only cells with this channel or phenotype. Should be a
-        column name in df_feat_all_specimens.
-        If not, orient ROIs where all cells are densest.
+        If provided, decide ROI placement based on only cells with this channel or phenotype. (All
+        cells will be included in the ROI, but the density of cells with this channel or phenotype
+        will decide where each cell is placed.) Should be a column name in df_feat_all_specimens.
+        If not provided, simply orient ROIs where all cells are densest.
     output_directory: Optional[str] = None
         If provided, save the graphs to disk in the specified directory.
 
@@ -317,7 +347,7 @@ def generate_graphs(df_cell: DataFrame,
             "Remaining data set percentage for training use must be between 0 and 100.")
     p_validation: float = validation_data_percent/100
     p_test: float = test_data_percent/100
-    roi_size: Tuple[int, int] = (roi_side_length, roi_side_length)
+    roi_size = None if roi_side_length is None else (roi_side_length, roi_side_length)
 
     if output_directory is not None:
         # Create graph directory if it doesn't exist yet
@@ -343,8 +373,9 @@ def generate_graphs(df_cell: DataFrame,
 
     # Create the graphs
     graphs_by_label_and_specimens, graph_names, feature_names = _create_graphs_from_spt(
-        df_cell, df_label, roi_size, use_channels=use_channels, use_phenotypes=use_phenotypes,
-        target_name=target_name)
+        df_cell, df_label, use_channels=use_channels, use_phenotypes=use_phenotypes,
+        roi_size=roi_size, cells_per_slide_target=cells_per_slide_target,
+        max_cells_to_consider=max_cells_to_consider, target_name=target_name)
 
     # Split graphs into train/validation/test sets as requested
     sets_data = _split_rois(graphs_by_label_and_specimens, p_validation, p_test)
