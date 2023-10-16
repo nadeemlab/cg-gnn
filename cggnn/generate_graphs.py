@@ -131,6 +131,8 @@ def _create_graphs_from_spt(df_cell: DataFrame,
             roi_names[graph_instance] = \
                 f'melanoma_{specimen}_{i}_{roi_size[0]}x{roi_size[1]}_x{x}_y{y}'
 
+        print(f'Created {len(bounding_boxes)} ROI(s) from specimen {specimen}.')
+
     # Split the graphs by specimen and label
     graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]]] = DefaultDict(dict)
     for specimen, graphs in graphs_by_specimen.items():
@@ -386,6 +388,23 @@ def generate_graphs(df_cell: DataFrame,
         for graph_list in graphs_by_specimen.values():
             for graph_instance in graph_list:
                 graph_to_label[graph_instance] = label
+
+    for i, graphs_by_specimen in enumerate(sets_data):
+        if len(graphs_by_specimen) > 0:
+            print(f'\n{TRAIN_VALIDATION_TEST[i]}:')
+        instances_by_label = DataFrame(columns=['count'])
+        instances_by_label.index.name = 'label'
+        for specimen, graphs in graphs_by_specimen.items():
+            label = df_label.loc[specimen, 'label']
+            count = len(graphs)
+            if label in instances_by_label.index:
+                instances_by_label.loc[label,] += count
+            else:
+                instances_by_label.loc[label,] = count
+        instances_by_label['prop'] = instances_by_label['count'] / \
+            instances_by_label['count'].sum()
+        instances_by_label.sort_index(inplace=True)
+        print(instances_by_label)
 
     # Write graphs to file in train/validation/test sets if requested
     graphs_data: List[GraphData] = []
