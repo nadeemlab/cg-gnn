@@ -1,6 +1,6 @@
 """Cell/tissue graph dataset utility functions."""
 
-from os.path import join, exists
+from os.path import join
 from importlib import import_module
 from copy import deepcopy
 from json import load as json_load
@@ -75,60 +75,30 @@ def save_cell_graphs(graphs_data: List[GraphData], output_directory: str) -> Non
             unlabeled_metadata.append(GraphMetadata(graph_data.name,
                                                     graph_data.specimen,
                                                     graph_data.set))
-    _save_dgl_graphs(output_directory, graphs, metadata, labels)
-    if len(unlabeled_graphs) > 0:
-        _save_dgl_graphs(output_directory, unlabeled_graphs, unlabeled_metadata)
+    _save_dgl_graphs(output_directory,
+                     graphs + unlabeled_graphs,
+                     metadata + unlabeled_metadata,
+                     labels)
 
 
 def _save_dgl_graphs(output_directory: str,
                      graphs: List[DGLGraph],
                      metadata: List[GraphMetadata],
-                     labels: Optional[List[int]] = None
+                     labels: List[int]
                      ) -> None:
     """Save DGL cell graphs to a directory."""
-    suffix = '_unlabeled' if (labels is None) else ''
-    save_graphs(join(output_directory, f'graphs{suffix}.bin'),
+    save_graphs(join(output_directory, 'graphs.bin'),
                 graphs,
-                {'labels': IntTensor(labels)} if (labels is not None) else None)
-    save_info(join(output_directory, f'graph_info{suffix}.pkl'), {'info': metadata})
+                {'labels': IntTensor(labels)})
+    save_info(join(output_directory, 'graph_info.pkl'), {'info': metadata})
 
 
-def _load_dgl_graphs(graph_directory: str,
-                     load_labeled: bool = True,
-                     load_unlabeled: bool = False
-                     ) -> Tuple[List[DGLGraph], List[int], List[GraphMetadata]]:
-    """Load cell graphs saved as DGL files from a directory."""
-    graphs: List[DGLGraph] = []
-    metadata: List[GraphMetadata] = []
-    labels: List[int] = []
-    if load_labeled:
-        graphs_labeled: List[DGLGraph]
-        labels_loaded: Dict[str, IntTensor]
-        graphs_labeled, labels_loaded = load_graphs(join(graph_directory, 'graphs.bin'))
-        graphs.extend(graphs_labeled)
-        labels.extend(labels_loaded['labels'].tolist())
-        metadata.extend(load_info(join(graph_directory, 'graph_info.pkl'))['info'])
-    if load_unlabeled:
-        unlabeled_filename = 'graphs_unlabeled.bin'
-        if exists(unlabeled_filename):
-            graphs_unlabeled: List[DGLGraph]
-            graphs_unlabeled, _ = load_graphs(join(graph_directory, unlabeled_filename))
-            graphs.extend(graphs_unlabeled)
-            metadata.extend(load_info(join(graph_directory, 'graph_info_unlabeled.pkl'))['info'])
-    return graphs, labels, metadata
-
-
-def load_cell_graphs(graph_directory: str,
-                     load_labeled: bool = True,
-                     load_unlabeled: bool = False
-                     ) -> Tuple[List[GraphData], List[str]]:
+def load_cell_graphs(graph_directory: str) -> Tuple[List[GraphData], List[str]]:
     """Load cell graph information from a directory.
 
     Assumes directory contains the files `graphs.bin`, `graph_info.pkl`, and `feature_names.txt`.
     """
-    graphs, labels, metadata = _load_dgl_graphs(graph_directory,
-                                                load_labeled=load_labeled,
-                                                load_unlabeled=load_unlabeled)
+    graphs, labels, metadata = _load_dgl_graphs(graph_directory)
     graph_data: List[GraphData] = []
     for i, graph in enumerate(graphs):
         graph_data.append(GraphData(graph,
@@ -139,6 +109,15 @@ def load_cell_graphs(graph_directory: str,
     feature_names: List[str] = loadtxt(join(graph_directory, 'feature_names.txt'),
                                        dtype=str, delimiter=',').tolist()
     return graph_data, feature_names
+
+
+def _load_dgl_graphs(graph_directory: str) -> Tuple[List[DGLGraph], List[int], List[GraphMetadata]]:
+    """Load cell graphs saved as DGL files from a directory."""
+    graphs, labels = load_graphs(join(graph_directory, 'graphs.bin'))
+    graphs: List[DGLGraph]
+    labels: Dict[str, IntTensor]
+    metadata: List[GraphMetadata] = load_info(join(graph_directory, 'graph_info.pkl'))['info']
+    return graphs, labels['labels'].tolist(), metadata
 
 
 def split_graph_sets(graphs_data: List[GraphData]) -> Tuple[Tuple[List[DGLGraph], List[int]],
