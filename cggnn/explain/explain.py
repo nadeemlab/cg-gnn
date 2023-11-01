@@ -15,10 +15,9 @@ from pandas import DataFrame
 
 from cggnn.util import CellGraphModel
 from cggnn.util.util import GraphData
-from .importance import calculate_importance
-from .plot_interactives import generate_interactives
-from .separability import calculate_separability
-from .specimen_importance import save_importances, unify_importance_across
+from cggnn.explain.importance import calculate_importance, save_importances, unify_importance_across
+from cggnn.explain.plot_interactives import generate_interactives
+from cggnn.explain.separability import calculate_separability
 
 
 def explain_cell_graphs(graphs_data: List[GraphData],
