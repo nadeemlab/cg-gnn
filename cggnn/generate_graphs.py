@@ -1,23 +1,137 @@
-"""Generates graphs from saved SPT files."""
+"""Generates graphs from SPT extracts."""
 
-from os import makedirs, listdir
-from os.path import join, isdir
+from os import makedirs
+from os.path import join, exists
 from random import shuffle, randint
 from warnings import warn
 from typing import Optional, Tuple, List, Dict, DefaultDict
 
-from torch import Tensor, FloatTensor, IntTensor  # pylint: disable=no-name-in-module
-from numpy import rint, median, prod, percentile, argmin, nonzero, savetxt
+from torch import FloatTensor, IntTensor  # pylint: disable=no-name-in-module
+from numpy import rint, median, prod, percentile, argmin, nonzero, savetxt, int_
 from numpy.typing import NDArray
 from dgl import DGLGraph, graph  # type: ignore
-from dgl.data.utils import save_graphs  # type: ignore
 from sklearn.neighbors import kneighbors_graph  # type: ignore
 from pandas import DataFrame
 from scipy.spatial.distance import pdist, squareform
 from tqdm import tqdm
 
-from cggnn.util import GraphData
-from cggnn.util.constants import CENTROIDS, FEATURES, INDICES, TRAIN_VALIDATION_TEST
+from cggnn.util import GraphData, save_cell_graphs, load_cell_graphs, set_seeds
+from cggnn.util.constants import CENTROIDS, FEATURES, INDICES, SETS, SETS_type
+
+
+def generate_graphs(df_cell: DataFrame,
+                    df_label: DataFrame,
+                    validation_data_percent: int,
+                    test_data_percent: int,
+                    use_channels: bool = True,
+                    use_phenotypes: bool = True,
+                    roi_side_length: Optional[int] = None,
+                    cells_per_slide_target: Optional[int] = 10_000,
+                    max_cells_to_consider: int = 100_000,
+                    target_name: Optional[str] = None,
+                    output_directory: Optional[str] = None,
+                    random_seed: Optional[int] = None,
+                    include_unlabeled: bool = False
+                    ) -> Tuple[List[GraphData], List[str]]:
+    """Generate cell graphs from SPT server extracts and save to disk if requested.
+
+    Parameters
+    ----------
+    df_cell: DataFrame
+        Rows are individual cells, indexed by an integer ID.
+        Column or column groups are, named and in order:
+            1. The 'specimen' the cell is from
+            2. Cell centroid positions 'pixel x' and 'pixel y'
+            3. Channel expressions starting with 'C ' and followed by a human-readable symbol
+            4. Phenotype expressions starting with 'P ' followed by a symbol
+    df_label: DataFrame
+        Rows are specimens, the sole column 'label' is its class label as an integer.
+    validation_data_percent: int
+    test_data_percent: int
+        Percent of regions of interest (ROIs) to reserve for the validation and test sets. Actual
+        percentage of ROIs may not match because different specimens may yield different ROI counts,
+        and the splitting process ensures that ROIs from the same specimen are not split among
+        different train/validation/test sets.
+        Set validation_data_percent to 0 if you want to do k-fold cross-validation later.
+        (Training data percent is calculated from these two percentages.)
+    use_channels: bool = True
+    use_phenotypes: bool = True
+        Whether to include channel or phenotype features (columns in df_cell beginning with 'C ' and
+        'P ', respectively) in the graph.
+    roi_side_length: Optional[int] = None
+    cells_per_slide_target: Optional[int] = 10_000
+        One of these must be provided in order to determine the ROI size. roi_side_length specifies
+        how long to make the side length of each square ROI, in pixels. If this isn't provided, the
+        median cell density across all slides is used with cells_per_slide_target to determine the
+        square ROI sizing.
+    max_cells_to_consider: int = 100_000
+        The maximum number of cells to consider when placing ROI bounds. All cells within each
+        boundary region will be included in the graph, but the ROI's center will be based on the
+        cell with the most and closest cells within the specified ROI size.
+        Empirically 350,000 works but 400,000 gives a 1.75 TB square and an out of memory error.
+    target_name: Optional[str] = None
+        If provided, decide ROI placement based on only cells with this channel or phenotype. (All
+        cells will be included in the ROI, but the density of cells with this channel or phenotype
+        will decide where each cell is placed.) Should be a column name in df_feat_all_specimens.
+        If not provided, simply orient ROIs where all cells are densest.
+    output_directory: Optional[str] = None
+        If provided, save the graphs to disk in the specified directory.
+    random_seed: Optional[int] = None
+        If provided, set the random seed to make the train/test/validation split deterministic.
+
+    Returns
+    -------
+    graphs_data: List[GraphData]
+    feature_names: List[str]
+        The names of the features in graph.ndata['features'] in the order they appear in the array.
+    """
+    if not 0 <= validation_data_percent < 100:
+        raise ValueError(
+            f"Validation set percentage must be between 0 and 100, not {validation_data_percent}%.")
+    if not 0 <= test_data_percent < 100:
+        raise ValueError(
+            f"Test set percentage must be between 0 and 100, not {test_data_percent}%.")
+    train_data_percent = validation_data_percent + test_data_percent
+    if not 0 <= train_data_percent < 100:
+        raise ValueError(
+            "Remaining data set percentage for training use must be between 0 and 100, not "
+            f"{train_data_percent}%.")
+    p_validation: float = validation_data_percent/100
+    p_test: float = test_data_percent/100
+    roi_size = None if roi_side_length is None else (roi_side_length, roi_side_length)
+
+    if random_seed is not None:
+        set_seeds(random_seed)
+
+    # Ensure output directory is created and check if graphs have already been generated
+    if output_directory is not None:
+        makedirs(output_directory, exist_ok=True)
+        feature_names_path = join(output_directory, 'feature_names.txt')
+        if exists(join(output_directory, 'graphs.bin')) and \
+            exists(join(output_directory, 'graph_info.pkl')) and \
+                exists(feature_names_path):
+            warn('Graphs already exist in output directory. Loading from file.')
+            return load_cell_graphs(output_directory)
+
+    graphs_by_label_and_specimen, graph_names, feature_names = _create_graphs_from_spt(
+        df_cell,
+        df_label,
+        use_channels=use_channels,
+        use_phenotypes=use_phenotypes,
+        roi_size=roi_size,
+        cells_per_slide_target=cells_per_slide_target,
+        max_cells_to_consider=max_cells_to_consider,
+        target_name=target_name,
+        include_unlabeled=include_unlabeled)
+    specimen_to_set = _split_rois(graphs_by_label_and_specimen, p_validation, p_test)
+    graphs_data: List[GraphData] = _assemble_graph_data(graphs_by_label_and_specimen,
+                                                        graph_names,
+                                                        specimen_to_set)
+    print(_report_dataset_statistics(graphs_data))
+    if output_directory is not None:
+        save_cell_graphs(graphs_data, output_directory)
+        savetxt(join(output_directory, 'feature_names.txt'), feature_names, fmt='%s', delimiter=',')
+    return graphs_data, feature_names
 
 
 def _create_graphs_from_spt(df_cell: DataFrame,
@@ -29,8 +143,10 @@ def _create_graphs_from_spt(df_cell: DataFrame,
                             max_cells_to_consider: int = 100_000,
                             target_name: Optional[str] = None,
                             n_neighbors: int = 5,
-                            threshold: Optional[int] = None
-                            ) -> Tuple[Dict[int, Dict[str, List[DGLGraph]]], Dict[DGLGraph, str],
+                            threshold: Optional[int] = None,
+                            include_unlabeled: bool = False
+                            ) -> Tuple[Dict[Optional[int], Dict[str, List[DGLGraph]]],
+                                       Dict[DGLGraph, str],
                                        List[str]]:
     """Create graphs from cell and label files created from SPT."""
     if df_label['label'].nunique() < 2:
@@ -73,7 +189,7 @@ def _create_graphs_from_spt(df_cell: DataFrame,
     for specimen, df_specimen in tqdm(grouped):
 
         # Skip specimens without labels
-        if specimen not in df_label.index:
+        if (not include_unlabeled) and (specimen not in df_label.index):
             continue
 
         # Normalize slide coordinates
@@ -134,16 +250,20 @@ def _create_graphs_from_spt(df_cell: DataFrame,
         print(f'Created {len(bounding_boxes)} ROI(s) from specimen {specimen}.')
 
     # Split the graphs by specimen and label
-    graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]]] = DefaultDict(dict)
+    graphs_by_label_and_specimen: Dict[Optional[int], Dict[str, List[DGLGraph]]] = DefaultDict(dict)
     for specimen, graphs in graphs_by_specimen.items():
-        label = df_label.loc[specimen, 'label']
+        label: Optional[int]
+        if include_unlabeled:
+            label = df_label.loc[specimen, 'label'] if (specimen in df_label.index) else None
+        else:
+            label = df_label.loc[specimen, 'label']
         graphs_by_label_and_specimen[label][specimen] = graphs
     return graphs_by_label_and_specimen, roi_names, features_to_use
 
 
-def _create_graph(node_indices: NDArray,
-                  centroids: NDArray,
-                  features: NDArray,
+def _create_graph(node_indices: NDArray[int_],
+                  centroids: NDArray[int_],
+                  features: NDArray[int_],
                   n_neighbors: int = 5,
                   threshold: Optional[int] = None
                   ) -> DGLGraph:
@@ -186,19 +306,23 @@ def _create_graph(node_indices: NDArray,
     return graph_instance
 
 
-def _split_rois(graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]]],
+def _split_rois(graphs_by_label_and_specimen: Dict[Optional[int], Dict[str, List[DGLGraph]]],
                 p_validation: float, p_test: float
-                ) -> Tuple[Dict[str, List[DGLGraph]],
-                           Dict[str, List[DGLGraph]],
-                           Dict[str, List[DGLGraph]]]:
+                ) -> Dict[str, Optional[SETS_type]]:
     """Randomly allocate graphs to train, validation, and test sets."""
-    train_graphs: Dict[str, List[DGLGraph]] = {}
-    validation_graphs: Dict[str, List[DGLGraph]] = {}
-    test_graphs: Dict[str, List[DGLGraph]] = {}
     p_train = 1 - p_validation - p_test
+    specimen_to_set: Dict[str, Optional[str]] = {}
 
     # Shuffle the order of the specimens in each class and divvy them up.
     for label, graphs_by_specimen in graphs_by_label_and_specimen.items():
+
+        # Separate out unlabeled specimens
+        if label is None:
+            for specimen in graphs_by_specimen:
+                specimen_to_set[specimen] = None
+            continue
+
+        # Stuff
         n_graphs = sum(len(l) for l in graphs_by_specimen.values())
         if n_graphs == 0:
             warn(f'Class {label} doesn\'t have any examples.')
@@ -208,26 +332,25 @@ def _split_rois(graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]
 
         # If there's at least one specimen of this class, add it to the training set.
         specimen = specimens[0]
-        train_graphs[specimen] = graphs_by_specimen[specimen]
+        specimen_to_set[specimen] = SETS[0]
         n_specimens = len(specimens)
         if n_specimens == 1:
-            warn(
-                f'Class {label} only has one specimen. Allocating to training set.')
+            warn(f'Class {label} only has one specimen. Allocating to training set.')
         elif n_specimens == 2:
             specimen = specimens[1]
             if (p_validation == 0) and (p_test == 0):
-                train_graphs[specimen] = graphs_by_specimen[specimen]
+                specimen_to_set[specimen] = SETS[0]
             elif p_test == 0:
-                validation_graphs[specimen] = graphs_by_specimen[specimen]
+                specimen_to_set[specimen] = SETS[1]
             elif p_validation == 0:
-                test_graphs[specimen] = graphs_by_specimen[specimen]
+                specimen_to_set[specimen] = SETS[2]
             else:
                 warn(f'Class {label} only has two specimens. '
                      'Allocating one for training and the other randomly to validation or test.')
                 if randint(0, 1) == 0:
-                    validation_graphs[specimen] = graphs_by_specimen[specimen]
+                    specimen_to_set[specimen] = SETS[1]
                 else:
-                    test_graphs[specimen] = graphs_by_specimen[specimen]
+                    specimen_to_set[specimen] = SETS[2]
         else:
             # Prepare to iterate through the remaining specimens.
             i_specimen: int = 1
@@ -237,26 +360,27 @@ def _split_rois(graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]
             n_allocated_val = 0
             n_allocated_test = 0
             if p_validation > 0:
-                validation_graphs[specimen] = graphs_by_specimen[specimen]
+                specimen_to_set[specimen] = SETS[1]
                 n_allocated_val = len(graphs_by_specimen[specimen])
                 i_specimen += 1
+                specimen = specimens[i_specimen]
             if p_test > 0:
-                test_graphs[specimen] = graphs_by_specimen[specimen]
+                specimen_to_set[specimen] = SETS[2]
                 n_allocated_test = len(graphs_by_specimen[specimen])
                 i_specimen += 1
 
             # Calculate the number of ROIs we want in the train/test/validation sets, correcting
             # for how there's already one specimen allocated to each.
-            n_train = n_graphs*p_train - len(graphs_by_specimen[specimens[0]])
-            n_validation = n_graphs*p_validation - n_allocated_val
-            n_test = n_graphs*p_test - n_allocated_test
-            if (n_train < 0) or (n_validation < 0) or (n_test < 0):
+            n_train_target = n_graphs*p_train - len(graphs_by_specimen[specimens[0]])
+            n_validation_target = n_graphs*p_validation - n_allocated_val
+            n_test_target = n_graphs*p_test - n_allocated_test
+            if (n_train_target < 0) or (n_validation_target < 0) or (n_test_target < 0):
                 which_sets: List[str] = []
-                if n_train < 0:
+                if n_train_target < 0:
                     which_sets.append('train')
-                if n_validation < 0:
+                if n_validation_target < 0:
                     which_sets.append('validation')
-                if n_test < 0:
+                if n_test_target < 0:
                     which_sets.append('test')
                 warn(f'Class {label} doesn\'t have enough specimens to maintain the specified '
                      f'{"/".join(which_sets)} proportion. Consider adding more specimens of this '
@@ -267,165 +391,40 @@ def _split_rois(graphs_by_label_and_specimen: Dict[int, Dict[str, List[DGLGraph]
             n_used_of_remainder = 0
             for specimen in specimens[i_specimen:]:
                 specimen_files = graphs_by_specimen[specimen]
-                if n_used_of_remainder < n_train:
-                    train_graphs[specimen] = specimen_files
-                elif n_used_of_remainder < n_train + n_validation:
-                    validation_graphs[specimen] = specimen_files
+                if n_used_of_remainder < n_train_target:
+                    specimen_to_set[specimen] = SETS[0]
+                elif n_used_of_remainder < n_train_target + n_validation_target:
+                    specimen_to_set[specimen] = SETS[1]
                 else:
-                    test_graphs[specimen] = specimen_files
+                    specimen_to_set[specimen] = SETS[2]
                 n_used_of_remainder += len(specimen_files)
 
-    return train_graphs, validation_graphs, test_graphs
+    return specimen_to_set
 
 
-def generate_graphs(df_cell: DataFrame,
-                    df_label: DataFrame,
-                    validation_data_percent: int,
-                    test_data_percent: int,
-                    use_channels: bool = True,
-                    use_phenotypes: bool = True,
-                    roi_side_length: Optional[int] = None,
-                    cells_per_slide_target: Optional[int] = 10_000,
-                    max_cells_to_consider: int = 100_000,
-                    target_name: Optional[str] = None,
-                    output_directory: Optional[str] = None
-                    ) -> Tuple[List[GraphData], List[str]]:
-    """Generate cell graphs from SPT server files and save to disk if requested.
-
-    Parameters
-    ----------
-    df_cell: DataFrame
-        Rows are individual cells, indexed by an integer ID.
-        Column or column groups are, named and in order:
-            1. The 'specimen' the cell is from
-            2. Cell centroid positions 'pixel x' and 'pixel y'
-            3. Channel expressions starting with 'C ' and followed by a human-readable symbol
-            4. Phenotype expressions starting with 'P ' followed by a symbol
-    df_label: DataFrame
-        Rows are specimens, the sole column 'label' is its class label as an integer.
-    validation_data_percent: int
-    test_data_percent: int
-        Percent of regions of interest (ROIs) to reserve for the validation and test sets. Actual
-        percentage of ROIs may not match because different specimens may yield different ROI counts,
-        and the splitting process ensures that ROIs from the same specimen are not split among
-        different train/validation/test sets.
-        Set validation_data_percent to 0 if you want to do k-fold cross-validation later.
-        (Training data percent is calculated from these two percentages.)
-    use_channels: bool = True
-    use_phenotypes: bool = True
-        Whether to include channel or phenotype features (columns in df_cell beginning with 'C ' and
-        'P ', respectively) in the graph.
-    roi_side_length: Optional[int] = None
-    cells_per_slide_target: Optional[int] = 10_000
-        One of these must be provided in order to determine the ROI size. roi_side_length specifies
-        how long to make the side length of each square ROI, in pixels. If this isn't provided, the
-        median cell density across all slides is used with cells_per_slide_target to determine the
-        square ROI sizing.
-    max_cells_to_consider: int = 100_000
-        The maximum number of cells to consider when placing ROI bounds. All cells within each
-        boundary region will be included in the graph, but the ROI's center will be based on the
-        cell with the most and closest cells within the specified ROI size.
-        Empirically 350,000 works but 400,000 gives a 1.75 TB square and an out of memory error.
-    target_name: Optional[str] = None
-        If provided, decide ROI placement based on only cells with this channel or phenotype. (All
-        cells will be included in the ROI, but the density of cells with this channel or phenotype
-        will decide where each cell is placed.) Should be a column name in df_feat_all_specimens.
-        If not provided, simply orient ROIs where all cells are densest.
-    output_directory: Optional[str] = None
-        If provided, save the graphs to disk in the specified directory.
-
-    Returns
-    -------
-    graphs_data: List[GraphData]
-    feature_names: List[str]
-        The names of the features in graph.ndata['features'] in the order they appear in the array.
-    """
-    if not 0 <= validation_data_percent < 100:
-        raise ValueError("Validation set percentage must be between 0 and 100.")
-    if not 0 <= test_data_percent < 100:
-        raise ValueError("Test set percentage must be between 0 and 100.")
-    if not 0 <= validation_data_percent + test_data_percent < 100:
-        raise ValueError(
-            "Remaining data set percentage for training use must be between 0 and 100.")
-    p_validation: float = validation_data_percent/100
-    p_test: float = test_data_percent/100
-    roi_size = None if roi_side_length is None else (roi_side_length, roi_side_length)
-
-    if output_directory is not None:
-        # Create graph directory if it doesn't exist yet
-        output_directory = join(output_directory, 'graphs')
-        makedirs(output_directory, exist_ok=True)
-
-        # Check if work has already been done by checking whether train, validation, and test
-        # folders have been created and populated
-        set_directories: List[str] = []
-        for set_type in TRAIN_VALIDATION_TEST:
-            directory = join(output_directory, set_type)
-            if isdir(directory) and (len(listdir(directory)) > 0):
-                raise RuntimeError(f'{set_type} set directory has already been created. '
-                                   'Assuming work is done and terminating.')
-            set_directories.append(directory)
-
-            # Ensure directory exists IFF graphs are going in it
-            if (set_type == 'validation') and (p_validation == 0):
-                continue
-            if (set_type == 'test') and (p_test == 0):
-                continue
-            makedirs(directory, exist_ok=True)
-
-    # Create the graphs
-    graphs_by_label_and_specimens, graph_names, feature_names = _create_graphs_from_spt(
-        df_cell, df_label, use_channels=use_channels, use_phenotypes=use_phenotypes,
-        roi_size=roi_size, cells_per_slide_target=cells_per_slide_target,
-        max_cells_to_consider=max_cells_to_consider, target_name=target_name)
-
-    # Split graphs into train/validation/test sets as requested
-    sets_data = _split_rois(graphs_by_label_and_specimens, p_validation, p_test)
-
-    # Create dict of graph to label
-    graph_to_label: Dict[DGLGraph, int] = {}
-    for label, graphs_by_specimen in graphs_by_label_and_specimens.items():
-        for graph_list in graphs_by_specimen.values():
+def _assemble_graph_data(graphs_by_label_and_specimen: Dict[Optional[int],
+                                                            Dict[str, List[DGLGraph]]],
+                         graph_names: Dict[DGLGraph, str],
+                         specimen_to_set: Dict[str, Optional[SETS_type]]
+                         ) -> List[GraphData]:
+    graph_data: List[GraphData] = []
+    for label, graphs_by_specimen in graphs_by_label_and_specimen.items():
+        for specimen, graph_list in graphs_by_specimen.items():
+            set_name = specimen_to_set[specimen]
             for graph_instance in graph_list:
-                graph_to_label[graph_instance] = label
+                graph_data.append(GraphData(graph_instance,
+                                            label,
+                                            graph_names[graph_instance],
+                                            specimen,
+                                            set_name))
+    return graph_data
 
-    for i, graphs_by_specimen in enumerate(sets_data):
-        if len(graphs_by_specimen) > 0:
-            print(f'\n{TRAIN_VALIDATION_TEST[i]}:')
-        instances_by_label = DataFrame(columns=['count'])
-        instances_by_label.index.name = 'label'
-        for specimen, graphs in graphs_by_specimen.items():
-            label = df_label.loc[specimen, 'label']
-            count = len(graphs)
-            if label in instances_by_label.index:
-                instances_by_label.loc[label,] += count
-            else:
-                instances_by_label.loc[label,] = count
-        instances_by_label['prop'] = instances_by_label['count'] / \
-            instances_by_label['count'].sum()
-        instances_by_label.sort_index(inplace=True)
-        print(instances_by_label)
 
-    # Write graphs to file in train/validation/test sets if requested
-    graphs_data: List[GraphData] = []
-    for i, set_data in enumerate(sets_data):
-        for specimen, graphs in set_data.items():
-            if output_directory is not None:
-                if (len(graphs) > 0) and (len(set_directories) < i):
-                    raise RuntimeError(
-                        'Created a validation or test entry that shouldn\'t be there.')
-                specimen_directory = join(set_directories[i], specimen)
-                makedirs(specimen_directory, exist_ok=True)
-            for graph_instance in graphs:
-                label = graph_to_label[graph_instance]
-                name = graph_names[graph_instance]
-                graphs_data.append(GraphData(graph_instance, label, name, specimen,
-                                             TRAIN_VALIDATION_TEST[i]))
-                if output_directory is not None:
-                    save_graphs(join(specimen_directory, name + '.bin'),
-                                [graph_instance],
-                                {'label': Tensor([label])})
-    if output_directory is not None:
-        savetxt(join(output_directory, 'feature_names.txt'), feature_names, fmt='%s')
-
-    return graphs_data, feature_names
+def _report_dataset_statistics(graphs_data: List[GraphData]) -> DataFrame:
+    df = DataFrame(columns=['label', 'set', 'count'])
+    for graph_instance in graphs_data:
+        if graph_instance.specimen in df.index:
+            df.loc[graph_instance.specimen, 'count'] += 1
+        else:
+            df.loc[graph_instance, :] = [graph_instance.label, graph_instance.set, 1]
+    return df.groupby(['set', 'label']).sum()

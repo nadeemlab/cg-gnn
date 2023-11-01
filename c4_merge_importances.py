@@ -32,20 +32,25 @@ def parse_arguments():
         default=None,
         required=False
     )
+    parser.add_argument(
+        '--random_seed',
+        type=int,
+        help='Random seed to use for reproducibility.',
+        default=None,
+        required=False
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
-    cell_graphs_data = load_cell_graphs(args.cg_path)
+    graphs_data = load_cell_graphs(args.cg_path)[0]
     cell_graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
-    for cg in cell_graphs_data:
+    for cg in graphs_data:
         cell_graphs_by_specimen[cg.specimen].append(cg.graph)
     hs_id_to_importance = unify_importance_across(
         list(cell_graphs_by_specimen.values()),
-        instantiate_model(
-            ([d.graph for d in cell_graphs_data], [d.label for d in cell_graphs_data]),
-            model_checkpoint_path=args.model_checkpoint_path))
+        instantiate_model(graphs_data, model_checkpoint_path=args.model_checkpoint_path),
+        random_seed=args.random_seed)
     if args.output_directory is not None:
-        save_importances(hs_id_to_importance, join(
-            args.output_directory, 'importances.csv'))
+        save_importances(hs_id_to_importance, join(args.output_directory, 'importances.csv'))

@@ -1,10 +1,6 @@
 """Generate interactive cell graph visualizations."""
 
 from argparse import ArgumentParser
-from typing import Dict, List, DefaultDict
-
-from numpy import genfromtxt
-from dgl import DGLGraph
 
 from cggnn.explain import generate_interactives
 from cggnn.util import load_cell_graphs
@@ -16,7 +12,7 @@ def parse_arguments():
     parser.add_argument(
         '--cg_path',
         type=str,
-        help='Path to the cell graphs.',
+        help='Directory with the cell graphs, metadata, and feature names.',
         required=True
     )
     parser.add_argument(
@@ -42,12 +38,5 @@ def parse_arguments():
 
 if __name__ == "__main__":
     args = parse_arguments()
-    cell_graphs_data = load_cell_graphs(args.cg_path)
-    graph_groups: Dict[str, List[DGLGraph]] = DefaultDict(list)
-    for g in cell_graphs_data:
-        if args.merge_rois:
-            graph_groups[g.specimen].append(g.graph)
-        else:
-            graph_groups[g.name].append(g.graph)
-    feature_names = genfromtxt(args.feature_names_path, dtype=str, delimiter=',').tolist()
-    generate_interactives(graph_groups, feature_names, args.output_directory)
+    graphs_data, feature_names = load_cell_graphs(args.cg_path)
+    generate_interactives(graphs_data, feature_names, args.output_directory)

@@ -2,7 +2,7 @@
 
 from os import makedirs
 from os.path import join
-from typing import List, Dict
+from typing import List, Dict, DefaultDict
 
 from tqdm import tqdm
 from dgl import DGLGraph
@@ -15,6 +15,7 @@ from bokeh.palettes import YlOrRd8
 from bokeh.layouts import row
 from bokeh.io import output_file, save
 
+from cggnn.util import GraphData
 from cggnn.util.constants import INDICES, FEATURES, CENTROIDS, IMPORTANCES
 
 
@@ -126,12 +127,17 @@ def _stich_specimen_graphs(graphs: List[DiGraph]) -> DiGraph:
     return graph_stitched
 
 
-def generate_interactives(graphs_to_plot: Dict[str, List[DGLGraph]],
+def generate_interactives(graphs_data: List[GraphData],
                           feature_names: List[str],
-                          out_directory: str) -> None:
+                          out_directory: str,
+                          merge_rois: bool = False
+                          ) -> None:
     """Create bokeh interactive plots for all graphs in the out_directory."""
     out_directory = join(out_directory, 'interactives')
     makedirs(out_directory, exist_ok=True)
+    graphs_to_plot: Dict[str, list[DGLGraph]] = DefaultDict(list)
+    for g in graphs_data:
+        graphs_to_plot[g.specimen if merge_rois else g.name].append(g.graph)
     for name, dgl_graphs in tqdm(graphs_to_plot.items()):
         graphs = [_convert_dgl_to_networkx(graph, feature_names) for graph in dgl_graphs]
         _make_bokeh_graph_plot(_stich_specimen_graphs(graphs), feature_names, name, out_directory)

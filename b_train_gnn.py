@@ -1,9 +1,6 @@
 """Script for training CG-GNN, TG-GNN, and HACT models."""
 
 from argparse import ArgumentParser
-from typing import Tuple, List
-
-from dgl import DGLGraph
 
 from cggnn import train
 from cggnn.util import load_cell_graphs
@@ -15,7 +12,7 @@ def parse_arguments():
     parser.add_argument(
         '--cg_path',
         type=str,
-        help='Path to the cell graphs.',
+        help='Directory with the cell graphs, metadata, and feature names.',
         required=True
     )
     parser.add_argument(
@@ -61,31 +58,23 @@ def parse_arguments():
         required=False,
         default=0
     )
-
+    parser.add_argument(
+        '--random_seed',
+        type=int,
+        help='Random seed to use for reproducibility.',
+        default=None,
+        required=False
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_arguments()
-
-    graphs = load_cell_graphs(args.cg_path)
-    cg_train: Tuple[List[DGLGraph], List[int]] = ([], [])
-    cg_val: Tuple[List[DGLGraph], List[int]] = ([], [])
-    cg_test: Tuple[List[DGLGraph], List[int]] = ([], [])
-
-    for gd in graphs:
-        which_set: Tuple[List[DGLGraph], List[int]] = cg_train
-        if gd.train_validation_test == 'validation':
-            which_set = cg_val
-        elif gd.train_validation_test == 'test':
-            which_set = cg_test
-        which_set[0].append(gd.graph)
-        which_set[1].append(gd.label)
-
-    train((cg_train, cg_val, cg_test),
+    train(load_cell_graphs(args.cg_path)[0],
           args.output_directory,
-          args.in_ram,
-          args.epochs,
-          args.learning_rate,
-          args.batch_size,
-          args.k_folds)
+          in_ram=args.in_ram,
+          epochs=args.epochs,
+          learning_rate=args.learning_rate,
+          batch_size=args.batch_size,
+          k_folds=args.k_folds,
+          random_seed=args.random_seed)

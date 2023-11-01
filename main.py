@@ -130,6 +130,13 @@ def parse_arguments():
         help='Remove entries for misclassified cell graphs when calculating separability scores.',
         action='store_true'
     )
+    parser.add_argument(
+        '--random_seed',
+        type=int,
+        help='Random seed to use for reproducibility.',
+        default=None,
+        required=False
+    )
     return parser.parse_args()
 
 
@@ -152,4 +159,5 @@ if __name__ == "__main__":
         k_folds=args.k_folds,
         explainer_model=args.explainer,
         merge_rois=args.merge_rois,
-        prune_misclassified=args.prune_misclassified)
+        prune_misclassified=args.prune_misclassified,
+        random_seed=args.random_seed)

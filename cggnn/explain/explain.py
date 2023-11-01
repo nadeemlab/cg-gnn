@@ -21,7 +21,7 @@ from .separability import calculate_separability
 from .specimen_importance import save_importances, unify_importance_across
 
 
-def explain_cell_graphs(cell_graphs_data: List[GraphData],
+def explain_cell_graphs(graphs_data: List[GraphData],
                         model: CellGraphModel,
                         explainer_model: str,
                         feature_names: List[str],
@@ -30,33 +30,36 @@ def explain_cell_graphs(cell_graphs_data: List[GraphData],
                         concept_grouping: Optional[Dict[str, List[str]]] = None,
                         risk: Optional[NDArray[Any]] = None,
                         pathological_prior: Optional[NDArray[Any]] = None,
-                        cell_graph_names: Optional[List[str]] = None,
                         label_to_result: Optional[Dict[int, str]] = None,
-                        output_directory: Optional[str] = None
+                        output_directory: Optional[str] = None,
+                        random_seed: Optional[int] = None
                         ) -> Tuple[DataFrame, DataFrame,
                                    Dict[Union[Tuple[int, int], Tuple[str, str]], DataFrame],
                                    Dict[int, float]]:
     """Generate explanations for all the cell graphs."""
-    cell_graphs_and_labels = ([d.graph for d in cell_graphs_data],
-                              [d.label for d in cell_graphs_data])
-    calculate_importance(cell_graphs_and_labels[0], model, explainer_model)
-    if (output_directory is not None) and (cell_graph_names is not None):
-        graph_groups: Dict[str, List[DGLGraph]] = DefaultDict(list)
-        for graph in cell_graphs_data:
-            graph_groups[graph.specimen if merge_rois else graph.name].append(graph.graph)
-        generate_interactives(graph_groups, feature_names, output_directory)
+    calculate_importance([d.graph for d in graphs_data], model,
+                         explainer_model, random_seed=random_seed)
+
+    if output_directory is not None:
+        generate_interactives(graphs_data, feature_names, output_directory, merge_rois)
 
     df_seperability_by_concept, df_seperability_aggregated, dfs_k_max_distance = \
-        calculate_separability(cell_graphs_and_labels, model, feature_names,
+        calculate_separability(graphs_data,
+                               model,
+                               feature_names,
                                label_to_result=label_to_result,
                                prune_misclassified=prune_misclassified,
-                               concept_grouping=concept_grouping, risk=risk,
-                               pathological_prior=pathological_prior, out_directory=output_directory)
+                               concept_grouping=concept_grouping,
+                               risk=risk,
+                               pathological_prior=pathological_prior,
+                               out_directory=output_directory)
 
     cell_graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
-    for cell_graph_data in cell_graphs_data:
+    for cell_graph_data in graphs_data:
         cell_graphs_by_specimen[cell_graph_data.specimen].append(cell_graph_data.graph)
-    importances = unify_importance_across(list(cell_graphs_by_specimen.values()), model)
+    importances = unify_importance_across(list(cell_graphs_by_specimen.values()),
+                                          model,
+                                          random_seed=random_seed)
     if output_directory is not None:
         save_importances(importances, join(output_directory, 'importances.csv'))
 

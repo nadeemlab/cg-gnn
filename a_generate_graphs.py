@@ -76,6 +76,13 @@ def parse_arguments():
         default=None,
         required=False
     )
+    parser.add_argument(
+        '--random_seed',
+        type=int,
+        help='Random seed to use for reproducibility.',
+        default=None,
+        required=False
+    )
     return parser.parse_args()
 
 
@@ -90,4 +97,5 @@ if __name__ == "__main__":
                     roi_side_length=args.roi_side_length,
                     cells_per_slide_target=args.cells_per_slide_target,
                     target_name=args.target_name,
-                    output_directory=args.output_directory)
+                    output_directory=args.output_directory,
+                    random_seed=args.random_seed)

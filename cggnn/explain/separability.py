@@ -24,13 +24,118 @@ from scipy.ndimage.filters import uniform_filter1d
 from pandas import DataFrame, Index
 from matplotlib.pyplot import plot, title, savefig, legend, clf
 
-from cggnn.util import CellGraphModel
+from cggnn.util import CellGraphModel, GraphData
 from cggnn.util.constants import FEATURES, IMPORTANCES
 from cggnn.train import infer_with_model
 
 
 IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
+
+
+def calculate_separability(graphs_data: List[GraphData],
+                           model: CellGraphModel,
+                           feature_names: List[str],
+                           label_to_result: Optional[Dict[int, str]] = None,
+                           prune_misclassified: bool = True,
+                           concept_grouping: Optional[Dict[str, List[str]]] = None,
+                           risk: Optional[NDArray[Any]] = None,
+                           pathological_prior: Optional[NDArray[Any]] = None,
+                           out_directory: Optional[str] = None,
+                           random_seed: Optional[int] = None
+                           ) -> Tuple[DataFrame, DataFrame,
+                                      Dict[Union[Tuple[int, int], Tuple[str, str]], DataFrame]]:
+    """Generate separability scores for each concept."""
+    # Get the importance scores, labels, and features from all cell graphs
+    graphs: List[DGLGraph] = []
+    importance_scores: List[NDArray] = []
+    labels: List[int] = []
+    features: List[NDArray] = []
+    for g in graphs_data:
+        if g.label is not None:
+            graphs.append(g.graph)
+            importance_scores.append(g.graph.ndata[IMPORTANCES])
+            labels.append(g.label)
+            features.append(g.graph.ndata[FEATURES])
+    assert features[0].shape[1] == len(feature_names)
+
+    classes = sort(unique(labels)).tolist()
+    if max(labels) + 1 != len(classes):
+        raise ValueError('Class missing from assigned labels. Ensure that your labels are '
+                         'zero-indexed and that at least one example from every class is present '
+                         'in your dataset.')
+
+    # Fetch graph concepts and classes/labels
+    if risk is None:
+        risk = ones(len(classes)) / len(classes)
+    else:
+        assert len(risk) == len(classes)
+
+    if prune_misclassified:
+        mask = _misclassified([g.graph for g in graphs_data], labels, model, random_seed)
+        importance_scores = list(compress(importance_scores, mask))
+        features = list(compress(features, mask))
+        labels = list(compress(labels, mask))
+
+    # Compute separability scores
+    least_cells = features[0].shape[0]
+    for graph_attribute in features:
+        if graph_attribute.shape[0] < least_cells:
+            least_cells = graph_attribute.shape[0]
+    separability_calculator = AttributeSeparability(
+        classes, list(range(1, least_cells, max((1, round(least_cells/100))))))
+    separability_scores, all_histograms, k_max_dist = separability_calculator.process(
+        importance_list=importance_scores,
+        attribute_list=features,
+        label_list=labels,
+        feature_names=feature_names
+    )
+
+    # Plot histograms
+    if out_directory is not None:
+        out_directory = join(out_directory, 'separability')
+        makedirs(out_directory, exist_ok=True)
+        for i, attribute_name in enumerate(feature_names):
+            _plot_histogram(all_histograms, out_directory, i, attribute_name,
+                            k=25 if 25 in all_histograms else max(tuple(all_histograms.keys())))
+
+    # Compute final qualitative metrics
+    if concept_grouping is None:
+        # If not explicitly provided, each attribute will be its own concept
+        concept_grouping = {cn: [cn] for cn in feature_names}
+    metric_analyser = SeparabilityAggregator(
+        separability_scores, concept_grouping)
+    df_aggregated = DataFrame({
+        'average': metric_analyser.compute_average_separability_score(risk),
+        'maximum': metric_analyser.compute_max_separability_score(risk)
+    })
+    if pathological_prior is not None:
+        df_aggregated['correlation'] = metric_analyser.compute_correlation_separability_score(
+            risk, pathological_prior)
+    if all(risk == risk[0]):
+        df_aggregated.drop('agg_with_risk', axis=0, inplace=True)
+
+    dfs_k_max_distance: Dict[Tuple[int, int], DataFrame] = {}
+    for class_pair, k_data in k_max_dist.items():
+        dfs_k_max_distance[class_pair] = DataFrame(
+            {'k': [dat[0] for dat in k_data.values()],
+             'dist': [dat[1] for dat in k_data.values()]},
+            index=[feature_names[i] for i in k_data.keys()])
+
+    df_seperability_by_concept = DataFrame(metric_analyser.separability_scores)
+
+    if label_to_result is not None:
+        df_seperability_by_concept.columns = [
+            _class_pair_rephrase(class_pair, label_to_result) for class_pair in
+            df_seperability_by_concept.columns.values]
+        df_aggregated.set_index(Index(
+            (_class_pair_rephrase(class_pair, label_to_result)
+             if isinstance(class_pair, tuple) else class_pair
+             ) for class_pair in df_aggregated.index.values), inplace=True)
+        dfs_k_max_distance = {_class_pair_rephrase(
+            class_pair, label_to_result): df for class_pair, df in dfs_k_max_distance.items()}
+
+    return df_seperability_by_concept, df_aggregated, dfs_k_max_distance
 
 
 class AttributeSeparability:
@@ -316,12 +421,12 @@ class SeparabilityAggregator:
         return corrs
 
 
-def plot_histogram(all_histograms: Dict[int, Dict[int, NDArray]],
-                   save_path: str,
-                   attr_id: int,
-                   attr_name: str,
-                   k: int = 25,
-                   smoothing=True) -> None:
+def _plot_histogram(all_histograms: Dict[int, Dict[int, NDArray]],
+                    save_path: str,
+                    attr_id: int,
+                    attr_name: str,
+                    k: int = 25,
+                    smoothing: bool = True) -> None:
     """Create histogram for a single attribute."""
     x = array(list(range(100)))
     for i, histogram in all_histograms[k].items():
@@ -336,109 +441,13 @@ def plot_histogram(all_histograms: Dict[int, Dict[int, NDArray]],
 
 def _misclassified(cell_graphs: List[DGLGraph],
                    cell_graph_labels: List[int],
-                   model: CellGraphModel
+                   model: CellGraphModel,
+                   random_seed: Optional[int] = None
                    ) -> List[bool]:
     """Identify which samples are misclassified."""
-    return (array(cell_graph_labels) == infer_with_model(model, cell_graphs)).tolist()
-
-
-def calculate_separability(cell_graphs_and_labels: Tuple[List[DGLGraph], List[int]],
-                           model: CellGraphModel,
-                           feature_names: List[str],
-                           label_to_result: Optional[Dict[int, str]] = None,
-                           prune_misclassified: bool = True,
-                           concept_grouping: Optional[Dict[str, List[str]]] = None,
-                           risk: Optional[NDArray[Any]] = None,
-                           pathological_prior: Optional[NDArray[Any]] = None,
-                           out_directory: Optional[str] = None
-                           ) -> Tuple[DataFrame, DataFrame,
-                                      Dict[Union[Tuple[int, int], Tuple[str, str]], DataFrame]]:
-    """Generate separability scores for each concept."""
-    # Get the importance scores, labels, and features from all cell graphs
-    importance_scores = [graph.ndata[IMPORTANCES] for graph in cell_graphs_and_labels[0]]
-    labels = cell_graphs_and_labels[1]
-    features = [graph.ndata[FEATURES] for graph in cell_graphs_and_labels[0]]
-
-    assert len(importance_scores) == len(labels) == len(features)
-    assert features[0].shape[1] == len(feature_names)
-
-    classes = sort(unique(labels)).tolist()
-    if max(labels) + 1 != len(classes):
-        raise ValueError('Class missing from assigned labels. Ensure that your labels are '
-                         'zero-indexed and that at least one example from every class is present '
-                         'in your dataset.')
-
-    # Fetch graph concepts and classes/labels
-    if risk is None:
-        risk = ones(len(classes)) / len(classes)
-    else:
-        assert len(risk) == len(classes)
-
-    if prune_misclassified:
-        mask = _misclassified(cell_graphs_and_labels[0], labels, model)
-        importance_scores = list(compress(importance_scores, mask))
-        features = list(compress(features, mask))
-        labels = list(compress(labels, mask))
-
-    # Compute separability scores
-    least_cells = features[0].shape[0]
-    for graph_attribute in features:
-        if graph_attribute.shape[0] < least_cells:
-            least_cells = graph_attribute.shape[0]
-    separability_calculator = AttributeSeparability(
-        classes, list(range(1, least_cells, max((1, round(least_cells/100))))))
-    separability_scores, all_histograms, k_max_dist = separability_calculator.process(
-        importance_list=importance_scores,
-        attribute_list=features,
-        label_list=labels,
-        feature_names=feature_names
-    )
-
-    # Plot histograms
-    if out_directory is not None:
-        out_directory = join(out_directory, 'separability')
-        makedirs(out_directory, exist_ok=True)
-        for i, attribute_name in enumerate(feature_names):
-            plot_histogram(all_histograms, out_directory, i, attribute_name,
-                           k=25 if 25 in all_histograms else max(tuple(all_histograms.keys())))
-
-    # Compute final qualitative metrics
-    if concept_grouping is None:
-        # If not explicitly provided, each attribute will be its own concept
-        concept_grouping = {cn: [cn] for cn in feature_names}
-    metric_analyser = SeparabilityAggregator(
-        separability_scores, concept_grouping)
-    df_aggregated = DataFrame({
-        'average': metric_analyser.compute_average_separability_score(risk),
-        'maximum': metric_analyser.compute_max_separability_score(risk)
-    })
-    if pathological_prior is not None:
-        df_aggregated['correlation'] = metric_analyser.compute_correlation_separability_score(
-            risk, pathological_prior)
-    if all(risk == risk[0]):
-        df_aggregated.drop('agg_with_risk', axis=0, inplace=True)
-
-    dfs_k_max_distance: Dict[Tuple[int, int], DataFrame] = {}
-    for class_pair, k_data in k_max_dist.items():
-        dfs_k_max_distance[class_pair] = DataFrame(
-            {'k': [dat[0] for dat in k_data.values()],
-             'dist': [dat[1] for dat in k_data.values()]},
-            index=[feature_names[i] for i in k_data.keys()])
-
-    df_seperability_by_concept = DataFrame(metric_analyser.separability_scores)
-
-    if label_to_result is not None:
-        df_seperability_by_concept.columns = [
-            _class_pair_rephrase(class_pair, label_to_result) for class_pair in
-            df_seperability_by_concept.columns.values]
-        df_aggregated.set_index(Index(
-            (_class_pair_rephrase(class_pair, label_to_result)
-             if isinstance(class_pair, tuple) else class_pair
-             ) for class_pair in df_aggregated.index.values), inplace=True)
-        dfs_k_max_distance = {_class_pair_rephrase(
-            class_pair, label_to_result): df for class_pair, df in dfs_k_max_distance.items()}
-
-    return df_seperability_by_concept, df_aggregated, dfs_k_max_distance
+    return (array(cell_graph_labels) == infer_with_model(model,
+                                                         cell_graphs,
+                                                         random_seed=random_seed)).tolist()
 
 
 def _class_pair_rephrase(class_pair: Tuple[int, int],

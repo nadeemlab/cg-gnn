@@ -1,17 +1,22 @@
 """Cell/tissue graph dataset utility functions."""
 
-from os import walk
-from os.path import join
+from os.path import join, exists
 from importlib import import_module
 from copy import deepcopy
 from json import load as json_load
-from typing import Tuple, List, Dict, Any, Optional, Iterable, NamedTuple, Literal, Set
+from random import seed
+from typing import Tuple, List, Dict, Any, Optional, Iterable, NamedTuple, Literal
 
-from torch import LongTensor, IntTensor, load
-from torch.cuda import is_available
+from numpy import loadtxt
+from numpy.random import seed as np_seed
+from torch import LongTensor, IntTensor, load, manual_seed, use_deterministic_algorithms  # type: ignore
+from torch.cuda import is_available, manual_seed_all
+from torch.cuda import manual_seed as cuda_manual_seed  # type: ignore
+from torch.backends import cudnn  # type: ignore
 from torch.utils.data import Dataset
-from dgl import batch, DGLGraph
-from dgl.data.utils import load_graphs
+from dgl import batch, DGLGraph  # type: ignore
+from dgl import seed as dgl_seed  # type: ignore
+from dgl.data.utils import save_graphs, save_info, load_graphs, load_info  # type: ignore
 
 from cggnn.util.ml.cell_graph_model import CellGraphModel
 from cggnn.util.constants import FEATURES, DEFAULT_GNN_PARAMETERS, DEFAULT_CLASSIFICATION_PARAMETERS
@@ -37,49 +42,127 @@ def load_label_to_result(path: str) -> Dict[int, str]:
 
 class GraphData(NamedTuple):
     """Data relevant to a cell graph instance."""
-
     graph: DGLGraph
-    label: int
+    label: Optional[int]
     name: str
     specimen: str
-    train_validation_test: Literal['train', 'validation', 'test']
+    set: Optional[Literal['train', 'validation', 'test']]
 
 
-def load_cell_graphs(graph_path: str,
-                     train: bool = True,
-                     validation: bool = True,
-                     test: bool = True) -> List[GraphData]:
-    """Load cell graphs. Must be in graph_path/<set>/<specimen>/<graph>.bin form."""
-    which_sets: Set[Literal['train', 'validation', 'test']] = set()
-    if train:
-        which_sets.add('train')
-    if validation:
-        which_sets.add('validation')
-    if test:
-        which_sets.add('test')
-
-    graphs: List[GraphData] = []
-    for directory_path, set_names, _ in walk(graph_path):
-        for set_name in set_names:
-            if set_name in {'train', 'test', 'validation'}:
-                for set_path, specimens, _ in walk(join(directory_path, set_name)):
-                    for specimen in specimens:
-                        for specimen_path, _, graph_names in walk(join(set_path, specimen)):
-                            for graph_name in graph_names:
-                                assert isinstance(graph_name, str)
-                                if graph_name.endswith('.bin'):
-                                    graph, label = load_graph(
-                                        join(specimen_path, graph_name))
-                                    graphs.append(
-                                        GraphData(graph, label, graph_name[:-4], specimen,
-                                                  set_name))
-    return graphs
+class GraphMetadata(NamedTuple):
+    """Data relevant to a cell graph instance."""
+    name: str
+    specimen: str
+    set: Optional[Literal['train', 'validation', 'test']]
 
 
-def load_graph(graph_path) -> Tuple[DGLGraph, int]:
-    """Load a single graph saved in the odd histocartography method."""
-    graph_packet = load_graphs(graph_path)
-    return graph_packet[0][0], graph_packet[1]['label'].item()
+def save_cell_graphs(graphs_data: List[GraphData], output_directory: str) -> None:
+    """Save cell graphs to a directory."""
+    graphs: List[DGLGraph] = []
+    labels: List[int] = []
+    metadata: List[GraphMetadata] = []
+    unlabeled_graphs: List[DGLGraph] = []
+    unlabeled_metadata: List[GraphMetadata] = []
+    for graph_data in graphs_data:
+        if graph_data.label is not None:
+            graphs.append(graph_data.graph)
+            metadata.append(GraphMetadata(graph_data.name,
+                                          graph_data.specimen,
+                                          graph_data.set))
+            labels.append(graph_data.label)
+        else:
+            unlabeled_graphs.append(graph_data.graph)
+            unlabeled_metadata.append(GraphMetadata(graph_data.name,
+                                                    graph_data.specimen,
+                                                    graph_data.set))
+    _save_dgl_graphs(output_directory, graphs, metadata, labels)
+    if len(unlabeled_graphs) > 0:
+        _save_dgl_graphs(output_directory, unlabeled_graphs, unlabeled_metadata)
+
+
+def _save_dgl_graphs(output_directory: str,
+                     graphs: List[DGLGraph],
+                     metadata: List[GraphMetadata],
+                     labels: Optional[List[int]] = None
+                     ) -> None:
+    """Save DGL cell graphs to a directory."""
+    suffix = '_unlabeled' if (labels is None) else ''
+    save_graphs(join(output_directory, f'graphs{suffix}.bin'),
+                graphs,
+                {'labels': IntTensor(labels)} if (labels is not None) else None)
+    save_info(join(output_directory, f'graph_info{suffix}.pkl'), {'info': metadata})
+
+
+def _load_dgl_graphs(graph_directory: str,
+                     load_labeled: bool = True,
+                     load_unlabeled: bool = False
+                     ) -> Tuple[List[DGLGraph], List[int], List[GraphMetadata]]:
+    """Load cell graphs saved as DGL files from a directory."""
+    graphs: List[DGLGraph] = []
+    metadata: List[GraphMetadata] = []
+    labels: List[int] = []
+    if load_labeled:
+        graphs_labeled: List[DGLGraph]
+        labels_loaded: Dict[str, IntTensor]
+        graphs_labeled, labels_loaded = load_graphs(join(graph_directory, 'graphs.bin'))
+        graphs.extend(graphs_labeled)
+        labels.extend(labels_loaded['labels'].tolist())
+        metadata.extend(load_info(join(graph_directory, 'graph_info.pkl'))['info'])
+    if load_unlabeled:
+        unlabeled_filename = 'graphs_unlabeled.bin'
+        if exists(unlabeled_filename):
+            graphs_unlabeled: List[DGLGraph]
+            graphs_unlabeled, _ = load_graphs(join(graph_directory, unlabeled_filename))
+            graphs.extend(graphs_unlabeled)
+            metadata.extend(load_info(join(graph_directory, 'graph_info_unlabeled.pkl'))['info'])
+    return graphs, labels, metadata
+
+
+def load_cell_graphs(graph_directory: str,
+                     load_labeled: bool = True,
+                     load_unlabeled: bool = False
+                     ) -> Tuple[List[GraphData], List[str]]:
+    """Load cell graph information from a directory.
+
+    Assumes directory contains the files `graphs.bin`, `graph_info.pkl`, and `feature_names.txt`.
+    """
+    graphs, labels, metadata = _load_dgl_graphs(graph_directory,
+                                                load_labeled=load_labeled,
+                                                load_unlabeled=load_unlabeled)
+    graph_data: List[GraphData] = []
+    for i, graph in enumerate(graphs):
+        graph_data.append(GraphData(graph,
+                                    labels[i] if i < len(labels) else None,
+                                    metadata[i].name,
+                                    metadata[i].specimen,
+                                    metadata[i].set))
+    feature_names: List[str] = loadtxt(join(graph_directory, 'feature_names.txt'),
+                                       dtype=str, delimiter=',').tolist()
+    return graph_data, feature_names
+
+
+def split_graph_sets(graphs_data: List[GraphData]) -> Tuple[Tuple[List[DGLGraph], List[int]],
+                                                            Tuple[List[DGLGraph], List[int]],
+                                                            Tuple[List[DGLGraph], List[int]],
+                                                            List[DGLGraph]]:
+    """Split graph data list into train, validation, test, and unlabeled sets."""
+    cg_train: Tuple[List[DGLGraph], List[int]] = ([], [])
+    cg_val: Tuple[List[DGLGraph], List[int]] = ([], [])
+    cg_test: Tuple[List[DGLGraph], List[int]] = ([], [])
+    cg_unlabeled: List[DGLGraph] = []
+
+    for gd in graphs_data:
+        if gd.label is None:
+            cg_unlabeled.append(gd.graph)
+            continue
+        which_set: Tuple[List[DGLGraph], List[int]] = cg_train
+        if gd.set == 'validation':
+            which_set = cg_val
+        elif gd.set == 'test':
+            which_set = cg_test
+        which_set[0].append(gd.graph)
+        which_set[1].append(gd.label)
+    return cg_train, cg_val, cg_test, cg_unlabeled
 
 
 class CGDataset(Dataset):
@@ -122,7 +205,7 @@ class CGDataset(Dataset):
         return self.n_cell_graphs
 
 
-def instantiate_model(cell_graphs: Tuple[List[DGLGraph], List[int]],
+def instantiate_model(cell_graphs: List[GraphData],
                       gnn_parameters: Dict[str, Any] = DEFAULT_GNN_PARAMETERS,
                       classification_parameters: Dict[str,
                                                       Any] = DEFAULT_CLASSIFICATION_PARAMETERS,
@@ -132,8 +215,8 @@ def instantiate_model(cell_graphs: Tuple[List[DGLGraph], List[int]],
     model = CellGraphModel(
         gnn_params=gnn_parameters,
         classification_params=classification_parameters,
-        node_dim=cell_graphs[0][0].ndata[FEATURES].shape[1],
-        num_classes=int(max(cell_graphs[1]))+1
+        node_dim=cell_graphs[0].graph.ndata[FEATURES].shape[1],
+        num_classes=int(max(g.label for g in cell_graphs))+1
     ).to(DEVICE)
     if model_checkpoint_path is not None:
         model.load_state_dict(load(model_checkpoint_path))
@@ -192,3 +275,17 @@ def copy_graph(x):
 def torch_to_numpy(x):
     """Convert a torch tensor to a numpy array."""
     return x.cpu().detach().numpy()
+
+
+def set_seeds(random_seed: int) -> None:
+    """Set random seeds for all libraries."""
+    seed(random_seed)
+    np_seed(random_seed)
+    manual_seed(random_seed)
+    dgl_seed(random_seed)
+    cuda_manual_seed(random_seed)
+    manual_seed_all(random_seed)  # multi-GPU
+    # use_deterministic_algorithms(True)
+    # # multi_layer_gnn uses nondeterministic algorithm when on GPU
+    # cudnn.deterministic = True
+    cudnn.benchmark = False

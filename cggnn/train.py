@@ -6,23 +6,91 @@ from typing import Callable, List, Tuple, Optional, Any, Sequence, Dict
 
 from numpy import array
 from numpy.typing import NDArray
-from torch import save, load, no_grad, argmax, cat
+from torch import save, load, no_grad, argmax, cat  # type: ignore
 from torch.cuda import is_available
 from torch.optim import Adam, Optimizer
 from torch.nn import CrossEntropyLoss
 from torch.nn.functional import softmax
 from torch.utils.data import ConcatDataset, DataLoader, SubsetRandomSampler
 from sklearn.model_selection import KFold
-from sklearn.metrics import accuracy_score, f1_score, classification_report
+from sklearn.metrics import accuracy_score, f1_score, classification_report  # type: ignore
 from dgl import DGLGraph
 from tqdm import tqdm
 
-from cggnn.util import CellGraphModel, CGDataset, collate, instantiate_model
+from cggnn.util import GraphData, split_graph_sets, CellGraphModel, CGDataset, collate, \
+    instantiate_model, set_seeds
 from cggnn.util.constants import DEFAULT_GNN_PARAMETERS, DEFAULT_CLASSIFICATION_PARAMETERS
 
 # cuda support
 IS_CUDA = is_available()
 DEVICE = 'cuda:0' if IS_CUDA else 'cpu'
+
+
+def train(graphs_data: List[GraphData],
+          output_directory: str,
+          in_ram: bool = True,
+          epochs: int = 10,
+          learning_rate: float = 1e-3,
+          batch_size: int = 1,
+          k_folds: int = 0,
+          random_seed: Optional[int] = None,
+          gnn_parameters: Dict[str, Any] = DEFAULT_GNN_PARAMETERS,
+          classification_parameters: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMETERS
+          ) -> CellGraphModel:
+    """Train CG-GNN."""
+    output_directory = _set_save_path(output_directory)
+
+    if random_seed is not None:
+        set_seeds(random_seed)
+
+    # make datasets (train, validation & test)
+    train_dataset, validation_dataset, test_dataset, kfold = _create_datasets(
+        graphs_data, in_ram, k_folds)
+
+    # declare model
+    model = instantiate_model(graphs_data,
+                              gnn_parameters=gnn_parameters,
+                              classification_parameters=classification_parameters)
+
+    # build optimizer
+    optimizer = Adam(model.parameters(),
+                     lr=learning_rate,
+                     weight_decay=5e-4)
+
+    # define loss function
+    loss_fn = CrossEntropyLoss()
+
+    # training loop
+    step: int = 0
+    best_validation_loss: float = 10e5
+    best_validation_accuracy: float = 0.
+    best_validation_weighted_f1_score: float = 0.
+    for epoch in range(epochs):
+
+        folds: List[Tuple[Optional[Any], Optional[Any]]] = list(
+            kfold.split(train_dataset)) if (kfold is not None) else [(None, None)]
+
+        for fold, (train_ids, test_ids) in enumerate(folds):
+
+            # Determine whether to k-fold and if so how
+            train_dataloader, validation_dataloader = _create_training_dataloaders(
+                train_ids, test_ids, train_dataset, validation_dataset, batch_size)
+
+            # A.) train for 1 epoch
+            model = model.to(DEVICE)
+            model, step = _train_step(
+                model, train_dataloader, loss_fn, optimizer, epoch, fold, step)
+
+            # B.) validate
+            model = _validation_step(
+                model, validation_dataloader, loss_fn, output_directory, epoch, fold, step,
+                best_validation_loss, best_validation_accuracy, best_validation_weighted_f1_score)
+
+    # testing loop
+    if test_dataset is not None:
+        model = _test_model(model, test_dataset, batch_size, loss_fn, output_directory, step)
+
+    return model
 
 
 def _set_save_path(output_directory: str) -> str:
@@ -37,24 +105,15 @@ def _set_save_path(output_directory: str) -> str:
     return output_directory
 
 
-def _create_dataset(cell_graphs: List[DGLGraph],
-                    cell_graph_labels: Optional[List[int]] = None,
-                    in_ram: bool = True
-                    ) -> Optional[CGDataset]:
-    """Make a cell graph dataset."""
-    return CGDataset(cell_graphs, cell_graph_labels, load_in_ram=in_ram) \
-        if (len(cell_graphs) > 0) else None
-
-
 def _create_datasets(
-    cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
-                           Tuple[List[DGLGraph], List[int]],
-                           Tuple[List[DGLGraph], List[int]]],
+    graphs_data: List[GraphData],
     in_ram: bool = True,
     k_folds: int = 3
 ) -> Tuple[CGDataset, Optional[CGDataset], Optional[CGDataset], Optional[KFold]]:
     """Make the cell and/or tissue graph datasets and the k-fold if necessary."""
-    train_dataset = _create_dataset(cell_graph_sets[0][0], cell_graph_sets[0][1], in_ram)
+    cell_graph_sets = split_graph_sets(graphs_data)
+    train_dataset: Optional[CGDataset] = \
+        _create_dataset(cell_graph_sets[0][0], cell_graph_sets[0][1], in_ram)
     assert train_dataset is not None
     validation_dataset = _create_dataset(cell_graph_sets[1][0], cell_graph_sets[1][1], in_ram)
     test_dataset = _create_dataset(cell_graph_sets[2][0], cell_graph_sets[2][1], in_ram)
@@ -69,6 +128,15 @@ def _create_datasets(
     kfold = KFold(n_splits=k_folds, shuffle=True) if k_folds > 0 else None
 
     return train_dataset, validation_dataset, test_dataset, kfold
+
+
+def _create_dataset(cell_graphs: List[DGLGraph],
+                    cell_graph_labels: Optional[List[int]] = None,
+                    in_ram: bool = True
+                    ) -> Optional[CGDataset]:
+    """Make a cell graph dataset."""
+    return CGDataset(cell_graphs, cell_graph_labels, load_in_ram=in_ram) \
+        if (len(cell_graphs) > 0) else None
 
 
 def _create_training_dataloaders(train_ids: Optional[Sequence[int]],
@@ -271,78 +339,16 @@ def _test_model(model: CellGraphModel,
     return model
 
 
-def train(cell_graph_sets: Tuple[Tuple[List[DGLGraph], List[int]],
-                                 Tuple[List[DGLGraph], List[int]],
-                                 Tuple[List[DGLGraph], List[int]]],
-          output_directory: str,
-          in_ram: bool = True,
-          epochs: int = 10,
-          learning_rate: float = 1e-3,
-          batch_size: int = 1,
-          k_folds: int = 0,
-          gnn_parameters: Dict[str, Any] = DEFAULT_GNN_PARAMETERS,
-          classification_parameters: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMETERS
-          ) -> CellGraphModel:
-    """Train CG-GNN."""
-    output_directory = _set_save_path(output_directory)
-
-    # make datasets (train, validation & test)
-    train_dataset, validation_dataset, test_dataset, kfold = _create_datasets(
-        cell_graph_sets, in_ram, k_folds)
-
-    # declare model
-    model = instantiate_model(cell_graph_sets[0],
-                              gnn_parameters=gnn_parameters,
-                              classification_parameters=classification_parameters)
-
-    # build optimizer
-    optimizer = Adam(model.parameters(),
-                     lr=learning_rate,
-                     weight_decay=5e-4)
-
-    # define loss function
-    loss_fn = CrossEntropyLoss()
-
-    # training loop
-    step: int = 0
-    best_validation_loss: float = 10e5
-    best_validation_accuracy: float = 0.
-    best_validation_weighted_f1_score: float = 0.
-    for epoch in range(epochs):
-
-        folds: List[Tuple[Optional[Any], Optional[Any]]] = list(
-            kfold.split(train_dataset)) if (kfold is not None) else [(None, None)]
-
-        for fold, (train_ids, test_ids) in enumerate(folds):
-
-            # Determine whether to k-fold and if so how
-            train_dataloader, validation_dataloader = _create_training_dataloaders(
-                train_ids, test_ids, train_dataset, validation_dataset, batch_size)
-
-            # A.) train for 1 epoch
-            model = model.to(DEVICE)
-            model, step = _train_step(
-                model, train_dataloader, loss_fn, optimizer, epoch, fold, step)
-
-            # B.) validate
-            model = _validation_step(
-                model, validation_dataloader, loss_fn, output_directory, epoch, fold, step,
-                best_validation_loss, best_validation_accuracy, best_validation_weighted_f1_score)
-
-    # testing loop
-    if test_dataset is not None:
-        model = _test_model(model, test_dataset, batch_size, loss_fn, output_directory, step)
-
-    return model
-
-
 def infer_with_model(model: CellGraphModel,
                      cell_graphs: List[DGLGraph],
                      in_ram: bool = True,
                      batch_size: int = 1,
-                     return_probability: bool = False
+                     return_probability: bool = False,
+                     random_seed: Optional[int] = None
                      ) -> NDArray:
     """Given a model, infer their classes."""
+    if random_seed is not None:
+        set_seeds(random_seed)
     model = model.eval()
 
     # make test data loader
@@ -362,10 +368,11 @@ def infer_with_model(model: CellGraphModel,
                              dim=1).detach().numpy()
 
 
-def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
+def infer(cell_graphs: List[GraphData],
           model_checkpoint_path: str,
           in_ram: bool = True,
           batch_size: int = 1,
+          random_seed: Optional[int] = None,
           gnn_params: Dict[str, Any] = DEFAULT_GNN_PARAMETERS,
           classification_params: Dict[str, Any] = DEFAULT_CLASSIFICATION_PARAMETERS
           ) -> None:
@@ -384,8 +391,12 @@ def infer(cell_graphs: Tuple[List[DGLGraph], List[int]],
     pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(pytorch_total_params)
 
-    all_test_preds = infer_with_model(model, cell_graphs[0], in_ram, batch_size)
-    all_test_labels = array(cell_graphs[1])
+    all_test_preds = infer_with_model(model,
+                                      [g.graph for g in cell_graphs],
+                                      in_ram,
+                                      batch_size,
+                                      random_seed=random_seed)
+    all_test_labels = array(g.label for g in cell_graphs)
 
     accuracy = accuracy_score(all_test_labels, all_test_preds)
     weighted_f1_score = f1_score(all_test_labels, all_test_preds, average='weighted')
