@@ -22,6 +22,7 @@ tables = "*"
 python = "*"
 scikit-learn = "*"
 scipy = "*"
+spatialprofilingtoolbox = "*"
 tqdm = "*"
 
 [tool.poetry.group.dev]

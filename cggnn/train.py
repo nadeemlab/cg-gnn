@@ -2,7 +2,7 @@
 
 from os import makedirs, listdir
 from os.path import exists, join
-from typing import Callable, List, Tuple, Optional, Any, Sequence, Dict
+from typing import Callable, List, Tuple, Optional, Any, Dict
 
 from numpy import array
 from numpy.typing import NDArray
@@ -11,14 +11,14 @@ from torch.cuda import is_available
 from torch.optim import Adam, Optimizer
 from torch.nn import CrossEntropyLoss
 from torch.nn.functional import softmax
-from torch.utils.data import ConcatDataset, DataLoader, SubsetRandomSampler
-from sklearn.model_selection import KFold
+from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, classification_report  # type: ignore
 from dgl import DGLGraph
 from tqdm import tqdm
+from spatialprofilingtoolbox.cggnn.dataset import CGDataset, create_datasets, create_training_dataloaders
+from spatialprofilingtoolbox.cggnn.util import GraphData, collate
 
-from cggnn.util import GraphData, split_graph_sets, CellGraphModel, CGDataset, collate, \
-    instantiate_model, set_seeds
+from cggnn.util import CellGraphModel, set_seeds, instantiate_model
 from cggnn.util.constants import DEFAULT_GNN_PARAMETERS, DEFAULT_CLASSIFICATION_PARAMETERS
 
 # cuda support
@@ -44,7 +44,7 @@ def train(graphs_data: List[GraphData],
         set_seeds(random_seed)
 
     # make datasets (train, validation & test)
-    train_dataset, validation_dataset, test_dataset, kfold = _create_datasets(
+    train_dataset, validation_dataset, test_dataset, kfold = create_datasets(
         graphs_data, in_ram, k_folds)
 
     # declare model
@@ -73,7 +73,7 @@ def train(graphs_data: List[GraphData],
         for fold, (train_ids, test_ids) in enumerate(folds):
 
             # Determine whether to k-fold and if so how
-            train_dataloader, validation_dataloader = _create_training_dataloaders(
+            train_dataloader, validation_dataloader = create_training_dataloaders(
                 train_ids, test_ids, train_dataset, validation_dataset, batch_size)
 
             # A.) train for 1 epoch
@@ -103,84 +103,6 @@ def _set_save_path(output_directory: str) -> str:
         output_directory += f'_{increment}'
     makedirs(output_directory, exist_ok=False)
     return output_directory
-
-
-def _create_datasets(
-    graphs_data: List[GraphData],
-    in_ram: bool = True,
-    k_folds: int = 3
-) -> Tuple[CGDataset, Optional[CGDataset], Optional[CGDataset], Optional[KFold]]:
-    """Make the cell and/or tissue graph datasets and the k-fold if necessary."""
-    cell_graph_sets = split_graph_sets(graphs_data)
-    train_dataset: Optional[CGDataset] = \
-        _create_dataset(cell_graph_sets[0][0], cell_graph_sets[0][1], in_ram)
-    assert train_dataset is not None
-    validation_dataset = _create_dataset(cell_graph_sets[1][0], cell_graph_sets[1][1], in_ram)
-    test_dataset = _create_dataset(cell_graph_sets[2][0], cell_graph_sets[2][1], in_ram)
-
-    if (k_folds > 0) and (validation_dataset is not None):
-        # stack train and validation datasets if both exist and k-fold cross validation is on
-        train_dataset = ConcatDataset((train_dataset, validation_dataset))
-        validation_dataset = None
-    elif (k_folds == 0) and (validation_dataset is None):
-        # set k_folds to 3 if not provided and no validation data is provided
-        k_folds = 3
-    kfold = KFold(n_splits=k_folds, shuffle=True) if k_folds > 0 else None
-
-    return train_dataset, validation_dataset, test_dataset, kfold
-
-
-def _create_dataset(cell_graphs: List[DGLGraph],
-                    cell_graph_labels: Optional[List[int]] = None,
-                    in_ram: bool = True
-                    ) -> Optional[CGDataset]:
-    """Make a cell graph dataset."""
-    return CGDataset(cell_graphs, cell_graph_labels, load_in_ram=in_ram) \
-        if (len(cell_graphs) > 0) else None
-
-
-def _create_training_dataloaders(train_ids: Optional[Sequence[int]],
-                                 test_ids: Optional[Sequence[int]],
-                                 train_dataset: CGDataset,
-                                 validation_dataset: Optional[CGDataset],
-                                 batch_size: int
-                                 ) -> Tuple[DataLoader, DataLoader]:
-    """Determine whether to k-fold and then create dataloaders."""
-    if (train_ids is None) or (test_ids is None):
-        if validation_dataset is None:
-            raise ValueError("validation_dataset must exist.")
-        train_dataloader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            collate_fn=collate
-        )
-        validation_dataloader = DataLoader(
-            validation_dataset,
-            batch_size=batch_size,
-            shuffle=True,
-            collate_fn=collate
-        )
-    else:
-        if validation_dataset is not None:
-            raise ValueError(
-                "validation_dataset provided but k-folding of training dataset requested.")
-        train_subsampler = SubsetRandomSampler(train_ids)
-        test_subsampler = SubsetRandomSampler(test_ids)
-        train_dataloader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            sampler=train_subsampler,
-            collate_fn=collate
-        )
-        validation_dataloader = DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            sampler=test_subsampler,
-            collate_fn=collate
-        )
-
-    return train_dataloader, validation_dataloader
 
 
 def _train_step(model: CellGraphModel,

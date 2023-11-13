@@ -10,6 +10,7 @@ poetry.lock
 *.txt
 *.npy
 *.json
+*.pkl
 
 # Models and folders
 mlruns/
