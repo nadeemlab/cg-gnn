@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, classification_report  # type: ignore
 from dgl import DGLGraph
 from tqdm import tqdm
-from spatialprofilingtoolbox.cggnn.dataset import CGDataset, create_datasets, create_training_dataloaders
+from spatialprofilingtoolbox.cggnn.dataset import CGDataset, create_datasets, create_dataset, create_training_dataloaders
 from spatialprofilingtoolbox.cggnn.util import GraphData, collate
 
 from cggnn.util import CellGraphModel, set_seeds, instantiate_model
@@ -274,7 +274,7 @@ def infer_with_model(model: CellGraphModel,
     model = model.eval()
 
     # make test data loader
-    dataset = _create_dataset(cell_graphs, None, in_ram)
+    dataset = create_dataset(cell_graphs, None, in_ram)
     assert dataset is not None
     dataloader = DataLoader(dataset, batch_size=batch_size, collate_fn=collate)
 

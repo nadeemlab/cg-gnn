@@ -1,16 +1,17 @@
 # `cg-gnn`
 
-`cg-gnn` (short for "Cell Graph - Graph Neural Networks'') is a library to create cell graphs from pathology slide data and train a graph neural network model using them to predict patient outcomes. This library is designed to be used with and as part of the [SPT framework](https://github.com/nadeemlab/SPT), although independent functionality is also possible provided you can provide formatted, cell level slide data.
+`cg-gnn` (short for "Cell Graph - Graph Neural Networks") is a library to train a graph neural network model on graphs built out of cell spatial data to predict patient outcomes or any other y-variable you choose. This library is designed to be used with the [Spatial Profiling Toolbox (SPT)](https://github.com/nadeemlab/SPT), although independent functionality is also possible provided you can provide cell graphs in the same DGL format as SPT does.
+
+In addition to standalone use, `cg-gnn` also serves as an example implementation of an SPT-compatible graph neural network pipeline, for open source developers to reference when building their own deep learning tools that use cell graphs created by SPT. The key features that have to be implemented are
+1. model training and inference
+2. cell-level importance score calculation
+If the input and output schema is followed, your tool will be compatible with the SPT ecosystem, allowing users to easily integrate your tool into their SPT workflows and upload your model's results to an SPT database.
 
 This library is a heavily modified version of [histocartography](https://github.com/BiomedSciAI/histocartography) and two of its applications, [hact-net](https://github.com/histocartography/hact-net) and [patho-quant-explainer](https://github.com/histocartography/patho-quant-explainer).
 
-## Getting started
+## Installation
 
-First, use [`spt cggnn extract`](https://github.com/nadeemlab/SPT/tree/main/spatialprofilingtoolbox/cggnn) to fetch pandas HDF files and JSONs that `cg-gnn` can use. Then, install `cg-gnn` using one of the methods below and run `main.py` from the command line or `run_all` from `cggnn/run_all.py`, providing it the paths to the files output by `spt cggnn extract` and your choice of parameters.
-
-### Installation
-
-#### Using pip
+### Using pip
 
 In addition to installing via pip,
 ```
@@ -21,15 +22,21 @@ you must also install using the instructions on their websites,
 * [DGL](https://www.dgl.ai/pages/start.html)
 * [CUDA](https://anaconda.org/nvidia/cudatoolkit) (optional but highly recommended if your machine supports it)
 
-#### From source
+### From source
 
 1. Clone this repository
-2. Create a conda environment using
+2. Create a conda environment that can run this software using
 ```
 conda env create -f environment.yml
 ```
-3. Run this module from the command line using `main.py`. Alternatively, scripts in the main directory running from `a` to `d4` allow you to step through each individual section of the `cg-gnn` pipeline, saving files along the way.
 
+## Quickstart
+
+Use [`spt cggnn extract` and `spt cggnn generate-graphs`](https://github.com/nadeemlab/SPT/tree/main/spatialprofilingtoolbox/cggnn) to create cell graphs from a SPT database instance that this python package can use.
+
+This module includes two scripts that you can call from the command line, or you can use the modules directly in Python.
+1. `cg-gnn-train` trains a graph neural network model on a set of cell graphs, saves the model to file, and updates the cell graphs it was trained on with cell-level importance-to-classification scores if an explainer model type is provided.
+2. `cg-gnn-separability` calculates class separability metrics given a trained model and other metadata.
 
 ## Credits
 

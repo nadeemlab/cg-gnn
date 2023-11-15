@@ -1,20 +1,18 @@
-name: cg-gnn2
+name: cg-gnn
 channels:
   - defaults
 dependencies:
-  - bokeh
   - dglteam::dgl-cuda11.8
   - h5py
   - matplotlib
-  - networkx
   - numpy
   - nvidia::cuda-toolkit=11.8
   - pandas
-  - psycopg2
-  - pyshp
   - pytables
   - python
   - pytorch::pytorch-cuda=11.8
   - scikit-learn
   - scipy
   - tqdm
+  - pip:
+    - spatialprofilingtoolbox[cggnn]

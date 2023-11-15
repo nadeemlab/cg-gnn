@@ -1,4 +1,4 @@
-"""Script for training CG-GNN, TG-GNN, and HACT models."""
+"""Train a CG-GNN on pre-split sets of cell graphs."""
 
 from argparse import ArgumentParser
 from os.path import join
@@ -15,15 +15,10 @@ def parse_arguments():
     """Parse command line arguments."""
     parser = ArgumentParser()
     parser.add_argument(
-        '--cg_path',
+        '--cg_directory',
         type=str,
-        help='Directory with the cell graphs, metadata, and feature names.',
-        required=True
-    )
-    parser.add_argument(
-        '--output_directory',
-        type=str,
-        help='Directory to save the model subdirectory into.',
+        help='Directory with the cell graphs, metadata, and feature names. '
+        'Model results and any other output will be saved to this directory.',
         required=True
     )
     parser.add_argument(
@@ -66,13 +61,13 @@ def parse_arguments():
     parser.add_argument(
         '--explainer',
         type=str,
-        help='Which explainer type to use.',
-        default='pp',
+        help='Which explainer type to use. If provided, importance scores will be calculated.',
+        default=None,
         required=False
     )
     parser.add_argument(
         '--merge_rois',
-        help='Merge ROIs together by specimen.',
+        help='Save a CSV of importance scores merged across ROIs from a single specimen.',
         action='store_true'
     )
     parser.add_argument(
@@ -85,28 +80,34 @@ def parse_arguments():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main():
     args = parse_arguments()
-    model = train(load_cell_graphs(args.cg_path)[0],
-                  args.output_directory,
+    graphs_data = load_cell_graphs(args.cg_directory)[0]
+    model = train(graphs_data,
+                  args.cg_directory,
                   in_ram=args.in_ram,
                   epochs=args.epochs,
                   learning_rate=args.learning_rate,
                   batch_size=args.batch_size,
                   k_folds=args.k_folds,
                   random_seed=args.random_seed)
-    graphs_data = load_cell_graphs(args.cg_path)[0]
-    cell_graphs = calculate_importance([d.graph for d in graphs_data],
-                                       model,
-                                       args.explainer,
-                                       random_seed=args.random_seed)
-    save_cell_graphs(graphs_data, args.cg_path)
-    if args.merge_rois:
-        cell_graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
-        for cg in graphs_data:
-            cell_graphs_by_specimen[cg.specimen].append(cg.graph)
-        hs_id_to_importance = unify_importance_across(
-            list(cell_graphs_by_specimen.values()),
-            instantiate_model(graphs_data, model_checkpoint_path=args.model_checkpoint_path),
-            random_seed=args.random_seed)
-        save_importances(hs_id_to_importance, join(args.cg_path, 'importances.csv'))
+    if args.explainer is not None:
+        cell_graphs = calculate_importance([d.graph for d in graphs_data],
+                                           model,
+                                           args.explainer,
+                                           random_seed=args.random_seed)
+        graphs_data = [d._replace(graph=graph) for d, graph in zip(graphs_data, cell_graphs)]
+        save_cell_graphs(graphs_data, args.cg_directory)
+        if args.merge_rois:
+            cell_graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
+            for cg in graphs_data:
+                cell_graphs_by_specimen[cg.specimen].append(cg.graph)
+            hs_id_to_importance = unify_importance_across(
+                list(cell_graphs_by_specimen.values()),
+                model,
+                random_seed=args.random_seed)
+            save_importances(hs_id_to_importance, join(args.cg_directory, 'importances.csv'))
+
+
+if __name__ == "__main__":
+    main()

@@ -30,15 +30,15 @@ def parse_arguments():
         required=True
     )
     parser.add_argument(
-        '--prune_misclassified',
-        help='Remove entries for misclassified cell graphs when calculating separability scores.',
-        action='store_true'
-    )
-    parser.add_argument(
         '--label_to_result_path',
         type=str,
         help='Where to find the data mapping label ints to their string results.',
         required=False
+    )
+    parser.add_argument(
+        '--prune_misclassified',
+        help='Remove entries for misclassified cell graphs when calculating separability scores.',
+        action='store_true'
     )
     parser.add_argument(
         '--output_directory',
@@ -57,7 +57,7 @@ def parse_arguments():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
+def main():
     args = parse_arguments()
     graphs_data, feature_names = load_cell_graphs(args.cg_path)
     df_concept, df_aggregated, dfs_k_dist = calculate_separability(
@@ -73,3 +73,7 @@ if __name__ == "__main__":
     for cg_pair, df_k in dfs_k_dist.items():
         print(cg_pair)
         print(df_k)
+
+
+if __name__ == "__main__":
+    main()

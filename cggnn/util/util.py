@@ -1,25 +1,22 @@
 """Cell/tissue graph dataset utility functions."""
 
-from os.path import join
 from importlib import import_module
 from copy import deepcopy
-from json import load as json_load
 from random import seed
-from typing import Tuple, List, Dict, Any, Optional, Iterable, NamedTuple, Literal
+from typing import Tuple, List, Dict, Any, Optional, Iterable
 
-from numpy import loadtxt
 from numpy.random import seed as np_seed
 from torch import LongTensor, IntTensor, load, manual_seed, use_deterministic_algorithms  # type: ignore
 from torch.cuda import is_available, manual_seed_all
 from torch.cuda import manual_seed as cuda_manual_seed  # type: ignore
 from torch.backends import cudnn  # type: ignore
-from torch.utils.data import Dataset
-from dgl import batch, DGLGraph  # type: ignore
+from dgl import batch  # type: ignore
 from dgl import seed as dgl_seed  # type: ignore
-from dgl.data.utils import save_graphs, save_info, load_graphs, load_info  # type: ignore
+from spatialprofilingtoolbox.cggnn.util.constants import FEATURES
+from spatialprofilingtoolbox.cggnn.util import GraphData
 
 from cggnn.util.ml.cell_graph_model import CellGraphModel
-from cggnn.util.constants import FEATURES, DEFAULT_GNN_PARAMETERS, DEFAULT_CLASSIFICATION_PARAMETERS
+from cggnn.util.constants import DEFAULT_GNN_PARAMETERS, DEFAULT_CLASSIFICATION_PARAMETERS
 
 
 IS_CUDA = is_available()

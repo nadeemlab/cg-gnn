@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "cg-gnn"
-version = "0.2.1"
-description = "Create cell graphs from single cell omics data and train a graph neural network to predict patient outcomes for SPT."
+version = "0.3"
+description = "Train a graph neural network for tissue graphs."
 license = "AGPL-3.0-or-later"
 authors = ["Carlin Liao <liaoc2@mskcc.org>"]
 readme = "README.md"
@@ -10,20 +10,20 @@ keywords = ["gnn", "pathology", "omics", "single-cell", "graph", "network", "dee
 packages = [{include = "cggnn"}]
 
 [tool.poetry.dependencies]
-bokeh = "*"
 h5py = "*"
 matplotlib = "*"
-networkx = "*"
 numpy = "*"
 pandas = "*"
-psycopg2-binary = "*"
-pyshp = "*"
 tables = "*"
 python = "*"
 scikit-learn = "*"
 scipy = "*"
 spatialprofilingtoolbox = "*"
 tqdm = "*"
+
+[tool.poetry.scripts]
+cg-gnn-train = 'cggnn.scripts.train:main'
+cg-gnn-separability = 'cggnn.scripts.separability:main'
 
 [tool.poetry.group.dev]
 optional = true
