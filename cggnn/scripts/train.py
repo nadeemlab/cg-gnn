@@ -5,15 +5,16 @@ from os.path import join
 from typing import Dict, List, DefaultDict
 
 from dgl import DGLGraph  # type: ignore
-from spatialprofilingtoolbox.cggnn.util import load_cell_graphs, save_cell_graphs
 
 from cggnn import train, calculate_importance, unify_importance_across, save_importances
-from cggnn.util import instantiate_model
+from cggnn.util import load_cell_graphs, save_cell_graphs
 
 
 def parse_arguments():
     """Parse command line arguments."""
-    parser = ArgumentParser()
+    parser = ArgumentParser(
+        description='Train a GNN on cell graphs.',
+    )
     parser.add_argument(
         '--cg_directory',
         type=str,

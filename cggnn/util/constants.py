@@ -1,5 +1,10 @@
 """Consistent names for dict field strings."""
 
+INDICES = 'histological_structure'
+FEATURES = 'features'
+CENTROIDS = 'centroid'
+IMPORTANCES = 'importance'
+
 DEFAULT_GNN_PARAMETERS = {
     'layer_type': "pna_layer",
     'output_dim': 64,

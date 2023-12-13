@@ -15,10 +15,9 @@ from torch.utils.data import DataLoader
 from sklearn.metrics import accuracy_score, f1_score, classification_report  # type: ignore
 from dgl import DGLGraph
 from tqdm import tqdm
-from spatialprofilingtoolbox.cggnn.dataset import CGDataset, create_datasets, create_dataset, create_training_dataloaders
-from spatialprofilingtoolbox.cggnn.util import GraphData, collate
 
-from cggnn.util import CellGraphModel, set_seeds, instantiate_model
+from cggnn.util import CellGraphModel, GraphData, CGDataset, create_datasets, create_dataset, \
+    create_training_dataloaders, collate, set_seeds, instantiate_model
 from cggnn.util.constants import DEFAULT_GNN_PARAMETERS, DEFAULT_CLASSIFICATION_PARAMETERS
 
 # cuda support

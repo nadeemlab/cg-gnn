@@ -2,15 +2,15 @@
 
 from argparse import ArgumentParser
 
-from spatialprofilingtoolbox.cggnn.util import load_cell_graphs, load_label_to_result
-
 from cggnn import calculate_separability
-from cggnn.util import instantiate_model
+from cggnn.util import instantiate_model, load_cell_graphs, load_label_to_result
 
 
 def parse_arguments():
     """Process command line arguments."""
-    parser = ArgumentParser()
+    parser = ArgumentParser(
+        description='Explain a cell graph prediction using a model and a graph explainer.',
+    )
     parser.add_argument(
         '--cg_path',
         type=str,

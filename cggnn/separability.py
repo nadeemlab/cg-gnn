@@ -23,9 +23,9 @@ from scipy.stats import wasserstein_distance
 from scipy.ndimage.filters import uniform_filter1d
 from pandas import DataFrame, Index
 from matplotlib.pyplot import plot, title, savefig, legend, clf
-from spatialprofilingtoolbox.cggnn.util import GraphData
-from spatialprofilingtoolbox.cggnn.util.constants import FEATURES, IMPORTANCES
 
+from cggnn.util import GraphData
+from cggnn.util.constants import FEATURES, IMPORTANCES
 from cggnn.util import CellGraphModel
 from cggnn.train import infer_with_model
 

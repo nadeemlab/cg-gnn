@@ -14,9 +14,9 @@ from torch import FloatTensor
 from torch.cuda import is_available
 from dgl import DGLGraph
 from pandas import Series
-from spatialprofilingtoolbox.cggnn.util.constants import IMPORTANCES, INDICES
 
 from cggnn.util import CellGraphModel, set_seeds
+from cggnn.util.constants import IMPORTANCES, INDICES
 from cggnn.util.interpretability import (BaseExplainer, GraphLRPExplainer, GraphGradCAMExplainer,
                                          GraphGradCAMPPExplainer, GraphPruningExplainer)
 from cggnn.train import infer_with_model

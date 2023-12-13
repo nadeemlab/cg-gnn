@@ -14,5 +14,3 @@ dependencies:
   - scikit-learn
   - scipy
   - tqdm
-  - pip:
-    - spatialprofilingtoolbox[cggnn]
