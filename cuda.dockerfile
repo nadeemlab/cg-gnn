@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir \
     spatialprofilingtoolbox[cggnn]
 RUN pip install --no-cache-dir dgl -f https://data.dgl.ai/wheels/cu118/repo.html
 RUN pip install --no-cache-dir dglgo -f https://data.dgl.ai/wheels-test/repo.html
+ENV DGLBACKEND=pytorch
 
 EXPOSE 80
 

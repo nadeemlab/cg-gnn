@@ -22,6 +22,7 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir dgl -f https://data.dgl.ai/wheels/repo.html
 RUN pip install --no-cache-dir dglgo -f https://data.dgl.ai/wheels-test/repo.html
+ENV DGLBACKEND=pytorch
 
 EXPOSE 80
 
