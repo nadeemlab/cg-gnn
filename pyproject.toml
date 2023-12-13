@@ -1,11 +1,11 @@
 [tool.poetry]
 name = "cg-gnn"
-version = "0.3"
-description = "Train a graph neural network for tissue graphs."
+version = "0.3.1"
+description = "Train a graph neural network on cell graphs."
 license = "AGPL-3.0-or-later"
 authors = ["Carlin Liao <liaoc2@mskcc.org>"]
 readme = "README.md"
-repository = "https://github.com/CarlinLiao/cg-gnn"
+repository = "https://github.com/nadeemlab/cg-gnn"
 keywords = ["gnn", "pathology", "omics", "single-cell", "graph", "network", "deep-learning", "machine-learning", "cancer", "predictive-modeling", "predictive-medicine", "precision-medicine", "precision-oncology", "precision-pathology", "precision-health", "precision-healthcare"]
 packages = [{include = "cggnn"}]
 
@@ -15,7 +15,7 @@ matplotlib = "*"
 numpy = "*"
 pandas = "*"
 tables = "*"
-python = "*"
+python = "^3.11"
 scikit-learn = "*"
 scipy = "*"
 tqdm = "*"

@@ -1,16 +1,23 @@
 name: cg-gnn
 channels:
   - defaults
+  - nvidia/label/cuda-11.8.0
+  - dglteam/label/cu118
 dependencies:
-  - dglteam::dgl-cuda11.8
+  - python==3.11
+  - pip
   - h5py
   - matplotlib
   - numpy
-  - nvidia::cuda-toolkit=11.8
   - pandas
   - pytables
-  - python
+  - cudatoolkit
+  - pytorch::pytorch
   - pytorch::pytorch-cuda=11.8
+  - dgl
   - scikit-learn
   - scipy
   - tqdm
+  # Development dependencies
+  - autopep8
+  - pylint
