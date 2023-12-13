@@ -1,13 +1,8 @@
 """Train a CG-GNN on pre-split sets of cell graphs."""
 
 from argparse import ArgumentParser
-from os.path import join
-from typing import Dict, List, DefaultDict
 
-from dgl import DGLGraph  # type: ignore
-
-from cggnn import train, calculate_importance, unify_importance_across, save_importances
-from cggnn.util import load_cell_graphs, save_cell_graphs
+from cggnn.run import train_and_evaluate
 
 
 def parse_arguments():
@@ -81,34 +76,14 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def main():
-    args = parse_arguments()
-    graphs_data = load_cell_graphs(args.cg_directory)[0]
-    model = train(graphs_data,
-                  args.cg_directory,
-                  in_ram=args.in_ram,
-                  epochs=args.epochs,
-                  learning_rate=args.learning_rate,
-                  batch_size=args.batch_size,
-                  k_folds=args.k_folds,
-                  random_seed=args.random_seed)
-    if args.explainer is not None:
-        cell_graphs = calculate_importance([d.graph for d in graphs_data],
-                                           model,
-                                           args.explainer,
-                                           random_seed=args.random_seed)
-        graphs_data = [d._replace(graph=graph) for d, graph in zip(graphs_data, cell_graphs)]
-        save_cell_graphs(graphs_data, args.cg_directory)
-        if args.merge_rois:
-            cell_graphs_by_specimen: Dict[str, List[DGLGraph]] = DefaultDict(list)
-            for cg in graphs_data:
-                cell_graphs_by_specimen[cg.specimen].append(cg.graph)
-            hs_id_to_importance = unify_importance_across(
-                list(cell_graphs_by_specimen.values()),
-                model,
-                random_seed=args.random_seed)
-            save_importances(hs_id_to_importance, join(args.cg_directory, 'importances.csv'))
-
-
 if __name__ == "__main__":
-    main()
+    args = parse_arguments()
+    train_and_evaluate(args.cg_directory,
+                       args.in_ram,
+                       args.batch_size,
+                       args.epochs,
+                       args.learning_rate,
+                       args.k_folds,
+                       args.explainer,
+                       args.merge_rois,
+                       args.random_seed)

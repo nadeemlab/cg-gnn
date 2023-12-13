@@ -2,8 +2,7 @@
 
 from argparse import ArgumentParser
 
-from cggnn import calculate_separability
-from cggnn.util import instantiate_model, load_cell_graphs, load_label_to_result
+from cggnn.run import find_separability
 
 
 def parse_arguments():
@@ -57,23 +56,11 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def main():
-    args = parse_arguments()
-    graphs_data, feature_names = load_cell_graphs(args.cg_path)
-    df_concept, df_aggregated, dfs_k_dist = calculate_separability(
-        graphs_data,
-        instantiate_model(graphs_data, model_checkpoint_path=args.model_checkpoint_path),
-        feature_names,
-        label_to_result=load_label_to_result(args.label_to_result_path),
-        prune_misclassified=args.prune_misclassified,
-        out_directory=args.output_directory,
-        random_seed=args.random_seed)
-    print(df_concept)
-    print(df_aggregated)
-    for cg_pair, df_k in dfs_k_dist.items():
-        print(cg_pair)
-        print(df_k)
-
-
 if __name__ == "__main__":
-    main()
+    args = parse_arguments()
+    find_separability(args.cg_path,
+                      args.model_checkpoint_path,
+                      args.label_to_result_path,
+                      args.prune_misclassified,
+                      args.output_directory,
+                      args.random_seed)
