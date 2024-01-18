@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cg-gnn"
-version = "0.3.1"
+version = "0.3.2"
 description = "Train a graph neural network on cell graphs."
 license = "AGPL-3.0-or-later"
 authors = ["Carlin Liao <liaoc2@mskcc.org>"]
@@ -15,7 +15,7 @@ matplotlib = "*"
 numpy = "*"
 pandas = "*"
 tables = "*"
-python = "^3.11"
+python = "^3.10"
 scikit-learn = "*"
 scipy = "*"
 tqdm = "*"

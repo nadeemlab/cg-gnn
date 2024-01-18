@@ -1,6 +1,6 @@
 # `cg-gnn`
 
-`cg-gnn` (short for "Cell Graph - Graph Neural Networks") is a library to train a graph neural network model on graphs built out of cell spatial data to predict patient outcomes or any other y-variable you choose. This library is designed to be used with the [Spatial Profiling Toolbox (SPT)](https://github.com/nadeemlab/SPT), although independent functionality is also possible provided you can provide cell graphs in the same DGL format as SPT does.
+`cg-gnn` (short for "Cell Graph - Graph Neural Networks") is a library to train a graph neural network model on graphs built out of cell spatial data to predict patient outcomes or any other y-variable you choose. This library is designed to be used with the [Spatial Profiling Toolbox (SPT)](https://github.com/nadeemlab/SPT), although independent functionality is also possible provided you can provide cell graphs in the same format as SPT [(as implemented in the `graphs` submodule)](https://github.com/nadeemlab/SPT/tree/main/spatialprofilingtoolbox/graphs).
 
 In addition to standalone use, `cg-gnn` also serves as an example implementation of an SPT-compatible graph neural network pipeline, for open source developers to reference when building their own deep learning tools that use cell graphs created by SPT. The key features that have to be implemented are
 1. model training and inference
@@ -30,9 +30,13 @@ you must also install using the instructions on their websites,
 conda env create -f environment.yml
 ```
 
+### Docker
+
+For convenience, Dockerized versions of this package are provided at [nadeemlab/spt-cg-gnn](https://hub.docker.com/repository/docker/nadeemlab/spt-cg-gnn/general). We recommend using the CUDA-enabled version, provided it will run on your machine.
+
 ## Quickstart
 
-Use [`spt cggnn extract` and `spt cggnn generate-graphs`](https://github.com/nadeemlab/SPT/tree/main/spatialprofilingtoolbox/cggnn) to create cell graphs from a SPT database instance that this python package can use.
+Use [`spt graphs extract` and `spt graphs generate-graphs`](https://github.com/nadeemlab/SPT/tree/main/spatialprofilingtoolbox/graphs) to create cell graphs from a SPT database instance that this python package can use.
 
 This module includes two scripts that you can call from the command line, or you can use the modules directly in Python.
 1. `cg-gnn-train` trains a graph neural network model on a set of cell graphs, saves the model to file, and updates the cell graphs it was trained on with cell-level importance-to-classification scores if an explainer model type is provided.
